@@ -31,9 +31,9 @@ end
 
 Flux.@functor(SSC_CNN)
 
-(m::SSC_CNN)(lr::Array{<:Real,3}, hr::Array{<:Real,3}) = m(MLUtils.unsqueeze(lr, 4), MLUtils.unsqueeze(hr, 4))
-(m::SSC_CNN)(lr::Array{<:Real,4}, hr::Array{<:Real,4}) = m(Float32.(lr), Float32.(hr))
-function (m::SSC_CNN)(lr::Array{Float32,4}, hr::Array{Float32,4})
+(m::SSC_CNN)(lr::AbstractArray{<:Real,3}, hr::AbstractArray{<:Real,3}) = m(MLUtils.unsqueeze(lr, 4), MLUtils.unsqueeze(hr, 4))
+(m::SSC_CNN)(lr::AbstractArray{<:Real,4}, hr::AbstractArray{<:Real,4}) = m(Float32.(lr), Float32.(hr))
+function (m::SSC_CNN)(lr::AbstractArray{Float32,4}, hr::AbstractArray{Float32,4})
     # Upsample LR Bands
     lr_up = Flux.upsample_bilinear(lr, (2, 2))
     x = cat(lr_up, hr, dims=3)
