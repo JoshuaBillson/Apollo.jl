@@ -33,6 +33,7 @@ end
 _precision(x::AbstractArray{Float16}, precision) = precision == :f16 ? x : _apply_precision(x, precision)
 _precision(x::AbstractArray{Float32}, precision) = precision == :f32 ? x : _apply_precision(x, precision)
 _precision(x::AbstractArray{Float64}, precision) = precision == :f64 ? x : _apply_precision(x, precision)
+_precision(x::AbstractArray{<:Real}, precision) = _apply_precision(x, precision)
 function _apply_precision(x::AbstractArray{<:Real}, precision)
     @match precision begin
         :f16 => Float16.(x)
