@@ -62,8 +62,9 @@ function (m::SSC_CNN)(lr::AbstractArray{Float32,4}, hr::AbstractArray{Float32,4}
 end
 
 function (m::SSC_CNN)(lr::AbstractRaster{<:Real,3}, hr::AbstractRaster{<:Real,3})
-    _dims = (dims(hr)[1:2]..., dims(lr, Band))
-    return Raster(m(lr.data, hr.data)[:,:,:,1], _dims, missingval=missingval(lr))
+    new_dims = (Rasters.dims(hr, X), Rasters.dims(hr, Y), Rasters.dims(lr, Band))
+    prediction = m(tensor(lr; dims=(X,Y,Band)), tensor(hr; dims=(X,Y,Band)))
+    return raster(prediction, (X,Y,Band), new_dims)
 end
 
 function (m::SSC_CNN)(lr::AbstractRasterStack, hr::AbstractRasterStack)

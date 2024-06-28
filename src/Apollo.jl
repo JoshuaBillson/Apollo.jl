@@ -15,8 +15,9 @@ include("models/unet.jl")
 include("models/ssc_cnn.jl")
 include("losses.jl")
 
-export UNet
+export UNet, SSC_CNN, Chain
 export TileSampler
-export tensor
+export tensor, raster, catlayers, add_dim, apply
+export binarycrossentropy, mae, mse
 
 end
