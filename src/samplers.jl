@@ -1,68 +1,60 @@
-struct TileSampler{D,T}
-	stack::D
+struct TileSampler{T,TS,D}
+	data::T
 	tiles::Vector{Tuple{Int,Int}}
 	tilesize::Int
+    tshape::D
 
-	function TileSampler(stack::D, tilesize::Int; stride=tilesize) where {D<:HasDims}
-		width, height = map(x -> size(stack, x), (X,Y))
+    function TileSampler(data::T, tilesize::Int; kwargs...) where {T}
+        return TileSampler{T,tilesize,Nothing}(nothing, data, tilesize; kwargs...)
+    end
+    function TileSampler(::Type{D}, data::T, tilesize::Int; kwargs...) where {D<:TShape, T}
+        return TileSampler{T,tilesize,D}(D, data, tilesize; kwargs...)
+    end
+	function TileSampler{T,TS,D}(::Any, data::T, tilesize::Int; stride=tilesize) where {D, T, TS}
+		width, height = map(x -> size(data, x), (X,Y))
 		xvals = 1:stride:width-tilesize+1
 		yvals = 1:stride:height-tilesize+1
 		tiles = [(x, y) for x in xvals for y in yvals]
-		return new{D,tilesize}(stack, tiles, tilesize)
+		return new{T,TS,D}(data, tiles, tilesize, D())
 	end
+end
+
+struct TileSet{T,D}
+    data::T
+    tshape::D
+
+    function TileSet(::Type{D}, data::T) where {D <: TShape, T}
+        return new{T,D}(data, D())
+    end
+end
+
+Base.length(x::TileSet) = length(x.data)
+
+Base.getindex(x::TileSet, i::Int) = getindex(x, [i])
+function Base.getindex(x::TileSet{T,D}, i::AbstractVector) where {T,D}
+    tensor(D, x.data[i]...)
 end
 
 Base.length(x::TileSampler) = length(x.tiles);
 
-function Base.getindex(x::TileSampler, i::Int)
-	return Base.getindex(x, [i]) |> first
+Base.getindex(x::TileSampler{T,TS,Nothing}, i::Int) where{T,TS} = getindex(x, [i]) |> first
+Base.getindex(x::TileSampler{T,TS,<:TShape}, i::Int) where{T,TS} = getindex(x, [i])
+function Base.getindex(x::TileSampler{T,TS,Nothing}, i::AbstractVector) where {T,TS}
+    return _tiles(x, i)
+end
+function Base.getindex(x::TileSampler{T,TS,D}, i::AbstractVector) where {T,TS,D<:TShape}
+    return tensor(D, _tiles(x, i)...)
 end
 
-function Base.getindex(x::TileSampler, i::AbstractVector)
-	stack = x.stack
+function _tiles(x::TileSampler{T,TS,D}, i::AbstractVector) where {T,TS,D}
+    data = x.data
 	tiles = x.tiles[i]
-	tilespan = x.tilesize - 1
-    return [stack[X(x:x+tilespan), Y(y:y+tilespan)] for (x, y) in tiles]
+	tilespan = TS - 1
+    return [data[X(x:x+tilespan), Y(y:y+tilespan)] for (x, y) in tiles]
 end
 
-struct Pipeline{D,T}
-    dims::D
-    sampler::T
-    Pipeline(dims::D, sampler::T) where {D,T} = new{D,T}(dims, sampler)
-end
+Base.iterate(x::Apollo.TileSampler, state=1) = state > length(x) ? nothing : (x[state], state+1)
 
-function Pipeline(samplers::Vararg{Pair})
-    _samplers = map(first, samplers)
-    _dims = map(last, samplers)
-    Pipeline(_dims, _samplers)
-end
-
-function Pipeline(samplers::Pair)
-    Pipeline(last(samplers), first(samplers))
-end
-
-Base.length(x::Pipeline) = length(x.sampler)
-
-Base.length(x::Pipeline{<:Tuple,<:Tuple}) = x.sampler |> first |> length
-
-function Base.getindex(x::Pipeline, i::Int)
-    return @pipe getindex(x.sampler, i) |> tensor(_; dims=x.dims)
-end
-
-function Base.getindex(x::Pipeline, i::AbstractVector)
-    return @pipe getindex(x.sampler, i) |> map(tile -> tensor(tile; dims=x.dims), _) |> _stack(_...)
-end
-
-function Base.getindex(x::Pipeline{<:Tuple,<:Tuple}, i::Int)
-    tiles = map(x -> getindex(x, i), x.sampler)
-    return Tuple(tensor(t; dims=d) for (t, d) in zip(tiles, x.dims))
-end
-
-function Base.getindex(x::Pipeline{<:Tuple,<:Tuple}, i::AbstractVector)
-    tiles = map(x -> getindex(x, i), x.sampler)
-    return Tuple(tensor(t...; dims=d) for (t, d) in zip(tiles, x.dims))
-end
-
-function Base.show(io::IO, x::TileSampler)
-    printstyled(io, "TileSampler(size=$(x.tilesize), length=$(length(x)))")
+function Base.show(io::IO, x::TileSampler{T,TS,D}) where {T, TS, D}
+    printstyled(io, "TileSampler{$D}(tile_size=$TS, num_tiles=$(length(x)))")
 end
