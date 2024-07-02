@@ -61,12 +61,8 @@ function (m::SSC_CNN)(lr::AbstractArray{Float32,4}, hr::AbstractArray{Float32,4}
     return residual .+ lr_up
 end
 
-function (m::SSC_CNN)(lr::AbstractRaster{<:Real,3}, hr::AbstractRaster{<:Real,3})
+function (m::SSC_CNN)(lr::HasDims, hr::HasDims)
     new_dims = (Rasters.dims(hr, X), Rasters.dims(hr, Y), Rasters.dims(lr, Band))
-    prediction = m(tensor(lr; dims=(X,Y,Band)), tensor(hr; dims=(X,Y,Band)))
-    return raster(prediction, (X,Y,Band), new_dims)
-end
-
-function (m::SSC_CNN)(lr::AbstractRasterStack, hr::AbstractRasterStack)
-    return RasterStack(m(Raster(lr), Raster(hr)), layersfrom=Band)
+    prediction = m(tensor(WHCN, lr), tensor(WHCN, hr))
+    return raster(prediction, WHCN, new_dims)
 end
