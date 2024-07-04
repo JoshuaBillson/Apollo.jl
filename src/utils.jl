@@ -29,12 +29,12 @@ function _apply_precision(x::AbstractArray{<:Real}, precision)
 end
 
 _dim_vals(x::AbstractDimStack, dim) = @pipe map(x -> _dim_vals(x, dim), layers(x)) |> reduce(vcat, _)
-_dim_vals(x::AbstractDimArray, dim) = hasdim(x, dim) ? collect(dims(x, dim)) : name(x)
+_dim_vals(x::AbstractDimArray, dim) = hasdim(x, dim) ? collect(dims(x, dim)) : Rasters.name(x)
 
 function _pretty_dim_vals(vals::AbstractVector, dim)
     map(vals) do val
         @match val begin
-            x::Int => Symbol("$(name(dim))_$x")
+            x::Int => Symbol("$(Rasters.name(dim))_$x")
             x::String => Symbol(x)
             x::Symbol => x
             _ => throw(ArgumentError("Non-Categorical Dimension!"))
@@ -42,7 +42,7 @@ function _pretty_dim_vals(vals::AbstractVector, dim)
     end
 end
 
-_permute(x, dims) = (name(Rasters.dims(x)) == name(dims)) ? x : permutedims(x, dims)
+_permute(x, dims) = (Rasters.name(Rasters.dims(x)) == Rasters.name(dims)) ? x : permutedims(x, dims)
 
 _stack(x::Vararg{AbstractArray{T,N}}) where {T,N} = cat(x..., dims=N)
 
@@ -54,12 +54,12 @@ function _dims_match(raster::AbstractDimArray, dims)
     # Check That Raster Contains all Dims
     missing_dims = _missing_dims(raster, dims)
     if !isempty(missing_dims)
-        throw(ArgumentError("Raster is missing dimension `$(name(first(missing_dims)))`!"))
+        throw(ArgumentError("Raster is missing dimension `$(Rasters.name(first(missing_dims)))`!"))
     end
 
     # Check That Raster Doesn't Have Extra Dims
     missing_dims = _missing_dims(dims, raster)
     if !isempty(missing_dims)
-        throw(ArgumentError("Raster has extra dimension `$(name(first(missing_dims)))`!"))
+        throw(ArgumentError("Raster has extra dimension `$(Rasters.name(first(missing_dims)))`!"))
     end
 end
