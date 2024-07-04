@@ -1,47 +1,35 @@
-struct UnetUpBlock
-    conv_transpose
-    conv
-end
-
-function UnetUpBlock(up_features::Int, skip_features, batch_norm)
-    conv_transpose = Flux.ConvTranspose((2,2), up_features=>skip_features, stride=2)
-    conv = ConvBlock((3,3), up_features, skip_features, Flux.relu, batch_norm=batch_norm)
-    return UnetUpBlock(conv_transpose, conv)
-end
-
-Flux.@functor UnetUpBlock
-
-function (m::UnetUpBlock)(x1, x2)
-    upsampled = m.conv_transpose(x1)
-    concat = cat(upsampled, x2, dims=3)
-    conv_out = m.conv(concat)
-    return conv_out
-end
-
-struct UnetDownBlock
-    conv
-    downsample
-end
-
 function UnetDownBlock(in_features::Int, out_features::Int, batch_norm)
-    conv = ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
-    downsample = Flux.MaxPool((2,2))
-    return UnetDownBlock(conv, downsample)
+    return Flux.Chain(
+        ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm), 
+        Flux.MaxPool((2,2))
+    )
 end
 
-Flux.@functor UnetDownBlock
+function UNetEncoder(in_features::Int, out_features::Int, batch_norm)
+    ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+end
 
-function (m::UnetDownBlock)(x)
-    conv_out = m.conv(x)
-    down = m.downsample(conv_out)
-    return (conv_out, down)
+function UNetDecoder(in_features::Int, out_features::Int, batch_norm)
+    ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+end
+
+function UNetBackbone(in_features::Int, out_features::Int, batch_norm)
+    ConvBlock((3,3), in_features, out_features, Flux.relu; batch_norm=batch_norm)
+end
+
+function UNetUp(in_features::Int, out_features::Int)
+    Flux.ConvTranspose((2,2), in_features=>out_features, stride=2)
 end
 
 struct UNet
-    down1
-    down2
-    down3
-    down4
+    encoder1
+    encoder2
+    encoder3
+    encoder4
+    decoder1
+    decoder2
+    decoder3
+    decoder4
     up1
     up2
     up3
@@ -51,50 +39,59 @@ struct UNet
 end
 
 function UNet(in_features, n_classes; batch_norm=false)
-    down1 = UnetDownBlock(in_features, 64, batch_norm)
-    down2 = UnetDownBlock(64, 128, batch_norm)
-    down3 = UnetDownBlock(128, 256, batch_norm)
-    down4 = UnetDownBlock(256, 512, batch_norm)
+    return UNet(
+        UNetEncoder(in_features, 64, batch_norm),  # Encoder 1
+        UNetEncoder(64, 128, batch_norm),          # Encoder 2
+        UNetEncoder(128, 256, batch_norm),         # Encoder 3
+        UNetEncoder(256, 512, batch_norm),         # Encoder 4
 
-    up4 = UnetUpBlock(1024, 512, batch_norm)
-    up3 = UnetUpBlock(512, 256, batch_norm)
-    up2 = UnetUpBlock(256, 128, batch_norm)
-    up1 = UnetUpBlock(128, 64, batch_norm)
-        
-    backbone = ConvBlock((3,3), 512, 1024, Flux.relu; batch_norm=batch_norm)
-    
-    head = Flux.Conv((1,1), 64=>n_classes)
-        
-    return UNet(down1, down2, down3, down4, up1, up2, up3, up4, backbone, head)
+        UNetDecoder(128, 64, batch_norm),          # Decoder 1
+        UNetDecoder(256, 128, batch_norm),         # Decoder 2
+        UNetDecoder(512, 256, batch_norm),         # Decoder 3
+        UNetDecoder(1024, 512, batch_norm),        # Decoder 4
+
+        UNetUp(128, 64),                           # Up 1
+        UNetUp(256, 128),                          # Up 2
+        UNetUp(512, 256),                          # Up 3
+        UNetUp(1024, 512),                         # Up 4
+
+        UNetBackbone(512, 1024, batch_norm),       # Backbone
+
+        Flux.Conv((1,1), 64=>n_classes)            # Classification Head
+    )
 end
 
 Flux.@functor(UNet)
 
 function Flux.activations(m::UNet, x)
-    skip1, down1 = m.down1(x)
-    skip2, down2 = m.down2(down1)
-    skip3, down3 = m.down3(down2)
-    skip4, down4 = m.down4(down3)
+    # Encoder Forward
+    enc1 = m.encoder1(x)
+    enc2 = Flux.maxpool(enc1, (2,2)) |> m.encoder2
+    enc3 = Flux.maxpool(enc2, (2,2)) |> m.encoder3
+    enc4 = Flux.maxpool(enc3, (2,2)) |> m.encoder4
+    bottleneck = Flux.maxpool(enc4, (2,2)) |> m.backbone
 
-    backbone = m.backbone(down4)
+    # Decoder Forward
+    dec4 = @pipe m.up4(bottleneck) |> cat(_, enc4, dims=3) |> m.decoder4
+    dec3 = @pipe m.up3(dec4) |> cat(_, enc3, dims=3) |> m.decoder3
+    dec2 = @pipe m.up2(dec3) |> cat(_, enc2, dims=3) |> m.decoder2
+    dec1 = @pipe m.up1(dec2) |> cat(_, enc1, dims=3) |> m.decoder1
 
-    up4 = m.up4(backbone, skip4)
-    up3 = m.up3(up4, skip3)
-    up2 = m.up2(up3, skip2)
-    up1 = m.up1(up2, skip1)
+    # Classification
+    head = m.head(dec1)
 
-    head = m.head(up1)
-
+    # Return Activations
     return (
-        encoder_1=skip1, encoder_2=skip2, encoder_3=skip3, encoder_4=skip4,
-        bottleneck=backbone, 
-        decoder_4=up4, decoder_3=up3, decoder_2=up2, decoder_1=up1,
+        encoder_1=enc1, encoder_2=enc2, encoder_3=enc3, encoder_4=enc4,
+        bottleneck=bottleneck, 
+        decoder_4=dec4, decoder_3=dec3, decoder_2=dec2, decoder_1=dec1,
         prediction=head
     )
 end
 
-(m::UNet)(x::AbstractArray{<:Real,4}) = m(Float32.(x))
-(m::UNet)(x::AbstractArray{Float32,4}) = Flux.activations(m, x).prediction
-function (m::UNet)(x::AbstractRaster)
-    return @pipe tensor(x; dims=(X,Y,Band)) |> m(_) |> raster(_, (X,Y,Band), Rasters.dims(x))
+(m::UNet)(x::AbstractArray{<:Real,4}) = Flux.activations(m, x).prediction
+function (m::UNet)(x::AbstractDimArray)
+    prediction = m(tensor(WHCN, x))
+    newdims = (dims(x, X), dims(x, Y), Band(1:size(prediction,3)))
+    return raster(prediction, WHCN, newdims)
 end
