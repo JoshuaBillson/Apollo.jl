@@ -1,12 +1,10 @@
-
 apply(f, x) = f(x)
 apply(f, x::AbstractVector) = map(f, x)
 
-function catlayers(x::AbstractRasterStack, dim)
-    dim_names = _dim_names(x, dim)
-    dim_names = allunique(dim_names) ? dim_names : 1:length(dim_names)
-    #@assert allunique(dim_names) "Dimension values for new array are not unique!"
-    return cat(layers(x)..., dims=dim(dim_names))
+function catlayers(x::AbstractDimStack, ::Type{D}) where {D <: Rasters.Dimension}
+    dim_vals = @pipe _dim_vals(x, D) |> _pretty_dim_vals(_, D)
+    newdim = allunique(dim_vals) ? D(dim_vals) : D(1:length(dim_vals))
+    return cat(layers(x)..., dims=newdim)
 end
 
 add_dim(raster, dims::Tuple) = reduce((acc, x) -> add_dim(acc, x), dims, init=raster)
@@ -30,16 +28,18 @@ function _apply_precision(x::AbstractArray{<:Real}, precision)
     end
 end
 
-_dim_names(dim::Symbol) = dim
-_dim_names(dim::String) = Symbol(dim)
-_dim_names(dim::Int) = Symbol("Band_$dim")
-_dim_names(dim::AbstractVector) = map(_dim_names, dim)
-_dim_names(x::AbstractRasterStack, dim) = @pipe map(x -> _dim_names(x, dim), layers(x)) |> reduce(vcat, _)
-function _dim_names(raster::AbstractRaster, dim)
-    if hasdim(raster, dim) && (size(raster, dim) > 1)
-        return _dim_names(collect(dims(raster, Band)))
+_dim_vals(x::AbstractDimStack, dim) = @pipe map(x -> _dim_vals(x, dim), layers(x)) |> reduce(vcat, _)
+_dim_vals(x::AbstractDimArray, dim) = hasdim(x, dim) ? collect(dims(x, dim)) : name(x)
+
+function _pretty_dim_vals(vals::AbstractVector, dim)
+    map(vals) do val
+        @match val begin
+            x::Int => Symbol("$(name(dim))_$x")
+            x::String => Symbol(x)
+            x::Symbol => x
+            _ => throw(ArgumentError("Non-Categorical Dimension!"))
+        end
     end
-    return name(raster)
 end
 
 _permute(x, dims) = (name(Rasters.dims(x)) == name(dims)) ? x : permutedims(x, dims)
@@ -49,9 +49,7 @@ _stack(x::Vararg{AbstractArray{T,N}}) where {T,N} = cat(x..., dims=N)
 _missing_dims(x::AbstractDimArray, dims::Tuple) = filter(dim -> !hasdim(x, dim), dims)
 _missing_dims(dims::Tuple, x::AbstractDimArray) = filter(dim -> !hasdim(dims, dim), Rasters.dims(x))
 
-_has_dims(raster::AbstractRaster, dims) = all(hasdim(raster, dims))
-_has_dims(dims, raster::AbstractRaster) = all(hasdim(dims, Rasters.dims(raster)))
-
+"Check that raster contains all of the dimensions in `dims` with no extra dimensions."
 function _dims_match(raster::AbstractDimArray, dims)
     # Check That Raster Contains all Dims
     missing_dims = _missing_dims(raster, dims)
@@ -63,17 +61,5 @@ function _dims_match(raster::AbstractDimArray, dims)
     missing_dims = _missing_dims(dims, raster)
     if !isempty(missing_dims)
         throw(ArgumentError("Raster has extra dimension `$(name(first(missing_dims)))`!"))
-    end
-end
-
-_sizes_match(xs...) = @pipe map(size, xs) |> all(==(first(_)), _)
-
-function _name_to_dim(dim)
-    @match dim begin
-        :X => X
-        :Y => Y
-        :Z => Z
-        :Band => Band
-        x::Symbol => Dim{x}
     end
 end
