@@ -1,3 +1,21 @@
+struct Normalize
+    μ::Vector{Float64}
+    σ::Vector{Float64}
+end
+
+Flux.@layer Normalize trainable=()
+
+(n::Normalize)(x::AbstractArray) = normalize(x, n.μ, n.σ)
+
+struct DeNormalize
+    μ::Vector{Float64}
+    σ::Vector{Float64}
+end
+
+Flux.@layer DeNormalize trainable=()
+
+(n::DeNormalize)(x::AbstractArray) = denormalize(x, n.μ, n.σ)
+
 function stats(x::AbstractArray)
     data = _extract_bands(x)
     return (map(mean, data), map(std, data))
@@ -28,16 +46,16 @@ end
 
 function normalize(x::AbstractArray{<:T,N}, μ::AbstractVector, σ::AbstractVector) where {T <: AbstractFloat, N}
     shape = Tuple(ifelse(i == 3, :, 1) for i in 1:N)
-	μ = T.(reshape(μ, shape))
-	σ = T.(reshape(σ, shape))
-	return (x .- μ) ./ σ
+    μ = T.(reshape(μ, shape))
+    σ = T.(reshape(σ, shape))
+    return (x .- μ) ./ σ
 end
 
 function denormalize(x::AbstractArray{<:T,N}, μ::AbstractVector, σ::AbstractVector) where {T <: AbstractFloat, N}
     shape = Tuple(ifelse(i == 3, :, 1) for i in 1:N)
-	μ = T.(reshape(μ, shape))
-	σ = T.(reshape(σ, shape))
-	return (x .* σ) .+ μ
+    μ = T.(reshape(μ, shape))
+    σ = T.(reshape(σ, shape))
+    return (x .* σ) .+ μ
 end
 
 _extract_bands(x::AbstractArray{<:Real}) =  _extract_bands(Float64.(x))
