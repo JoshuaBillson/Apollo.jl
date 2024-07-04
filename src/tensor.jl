@@ -67,8 +67,8 @@ function raster(tensor::AbstractArray{T,TN}, tdims::Tuple, rdims::Tuple) where {
         throw(ArgumentError("Tensor contains multiple observations!"))
     end
     (TN != length(rdims)) && throw(ArgumentError("Provided $(length(rdims)) raster dimensions for $TN dimensional tensor!"))
-    dims = map(x -> _tdim_to_rdim(rdims, x), tdims)
-    return Raster(tensor, dims)
+    newdims = dims(rdims, map(_tdim_to_rdim, tdims))
+    return Raster(tensor, newdims)
 end
 
 Base.size(x::Tensor, dim::Integer) = Base.size(x.data, dim)
@@ -115,13 +115,12 @@ _rdims(::Type{WHCLN}) = (X,Y,Band,Ti)
 _catlayers(::Type{WHCN}, x::AbstractDimStack) = catlayers(x, Band)
 _catlayers(::Type{WHCLN}, x::AbstractDimStack) = catlayers(x, Ti)
 
-_tdim_to_rdim(x::HasDims, dim::TDim) = _tdim_to_rdim(dims(x), dim)
-function _tdim_to_rdim(rdims, dim::TDim)
+function _tdim_to_rdim(dim::TDim)
     @match dim begin
-        $W => dims(rdims, X)
-        $H => dims(rdims, Y)
+        $W => X
+        $H => Y
         $C => Band
-        $L => dims(rdims, Ti)
+        $L => Ti
     end
 end
 
