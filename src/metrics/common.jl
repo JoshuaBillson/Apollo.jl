@@ -64,7 +64,7 @@ function compute(metric::Metric)
     return compute(metric.measure, metric.state)
 end
 
-Base.show(io::IO, x::Metric{M}) where {M <: AbstractMetric} = print(io, "$(name(M)): $(round(compute(x), digits=4))")
+Base.show(io::IO, x::Metric) = print(io, "$(name(x)): $(round(compute(x), digits=4))")
 
 """
     evaluate(model, data, measures...)

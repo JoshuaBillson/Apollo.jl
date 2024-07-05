@@ -8,6 +8,8 @@ function update(x::ClassificationMetric, state, ŷ::AbstractArray{<:AbstractFlo
     return update(x, state, mapslices(Flux.onecold, ŷ, dims=cdim), mapslices(Flux.onecold, y, dims=cdim))
 end
 
+# Accuracy
+
 struct Accuracy <: ClassificationMetric end
 
 function name(::Accuracy)
@@ -25,6 +27,8 @@ end
 function compute(::Accuracy, state)
     state.correct / max(state.total, 1)
 end
+
+# MIoU
 
 struct MIoU <: ClassificationMetric
     nclasses::Int
