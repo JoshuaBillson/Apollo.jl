@@ -1,10 +1,3 @@
-function UnetDownBlock(in_features::Int, out_features::Int, batch_norm)
-    return Flux.Chain(
-        ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm), 
-        Flux.MaxPool((2,2))
-    )
-end
-
 function UNetEncoder(in_features::Int, out_features::Int, batch_norm)
     ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
 end
@@ -61,7 +54,7 @@ function UNet(in_features, n_classes; batch_norm=false)
     )
 end
 
-Flux.@functor(UNet)
+Flux.@layer UNet
 
 function Flux.activations(m::UNet, x)
     # Encoder Forward
