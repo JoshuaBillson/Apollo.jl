@@ -72,7 +72,7 @@ Base.show(io::IO, x::Metric) = print(io, "$(name(x)): $(round(compute(x), digits
 Evaluate the model's performance on the provided data.
 
 # Parameters
-- `model`: A callable of the form `ŷ = model(x)`.
+- `model`: A callable that takes a single batch from `data` and returns a tuple of the form (ŷ, y).
 - `data`: An iterable of (x, y) values.
 - `measures`: A set of `AbstractMetrics` to use for evaluating `model`.
 
@@ -81,15 +81,17 @@ A `NamedTuple` containing the performance metrics for the given model.
 
 # Example
 ```julia
-evaluate(DataLoader((xsampler, ysampler)), Accuracy(), MIoU(2)) do x
-    model(x) |> Flux.sigmoid
+evaluate(DataLoader((xsampler, ysampler)), Accuracy(), MIoU(2)) do (x, y)
+    ŷ = model(x) |> Flux.sigmoid
+    return (ŷ, y)
 end
 ```
 """
 function evaluate(model, data, measures::Vararg{AbstractMetric})
     metrics = map(Metric, measures)
-    for (x, y) in data
-        foreach(metric -> update!(metric, model(x), y), metrics)
+    for batch in data
+        ŷ, y = model(batch)
+        foreach(metric -> update!(metric, ŷ, y), metrics)
     end
     vals = map(compute, metrics)
     names = map(Symbol ∘ name, metrics)
