@@ -1,10 +1,10 @@
-struct RecurrentConv{C,T}
+struct RecurrentConv{C}
     conv::C
+    t::Int
 end
 
 Flux.@layer RecurrentConv
 
-RecurrentConv(conv::C, t::Int) where{C} = RecurrentConv{C,t}(conv)
 function RecurrentConv(kernel::Tuple, filters::Int; t=2, batch_norm=false)
     if batch_norm
         RecurrentConv(
@@ -19,9 +19,9 @@ function RecurrentConv(kernel::Tuple, filters::Int; t=2, batch_norm=false)
     end
 end
 
-function (m::RecurrentConv{C,T})(x) where {C,T}
+function (m::RecurrentConv)(x)
     x1 = nothing
-    for i in 1:T
+    for i in 1:m.t
         if i == 1
             x1 = m.conv(x)
         else
