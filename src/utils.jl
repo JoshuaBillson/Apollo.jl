@@ -7,6 +7,14 @@ function catlayers(x::AbstractDimStack, ::Type{D}) where {D <: Rasters.Dimension
     return cat(layers(x)..., dims=newdim)
 end
 
+function foldlayers(f, xs::AbstractRasterStack)
+    map(f ∘ skipmissing, layers(xs))
+end
+
+function folddims(f, xs::AbstractRaster; dims=Band)
+    map(f ∘ skipmissing, eachslice(xs, dims=dims)).data
+end
+
 add_dim(raster, dims::Tuple) = reduce((acc, x) -> add_dim(acc, x), dims, init=raster)
 function add_dim(x, ::Type{T}) where {T <: Rasters.DD.Dimension}
     if !hasdim(x, T)
@@ -15,6 +23,8 @@ function add_dim(x, ::Type{T}) where {T <: Rasters.DD.Dimension}
     end
     return x
 end
+
+_unzip(x) = map(f -> getfield.(x, f), fieldnames(eltype(x)))
 
 _precision(x::AbstractArray{Float16}, precision) = precision == :f16 ? x : _apply_precision(x, precision)
 _precision(x::AbstractArray{Float32}, precision) = precision == :f32 ? x : _apply_precision(x, precision)
