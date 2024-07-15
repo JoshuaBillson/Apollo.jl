@@ -25,9 +25,11 @@ include("data/views.jl")
 # Models
 include("models/common.jl")
 include("models/chain.jl")
+include("models/resnet.jl")
 include("models/unet.jl")
 include("models/ssc_cnn.jl")
 include("models/r2unet.jl")
+include("models/deeplab.jl")
 
 # Losses
 include("losses.jl")
@@ -62,6 +64,6 @@ export AbstractMetric, ClassificationMetric, Metric, MIoU, Accuracy, Loss
 export name, init, update, update!, compute, evaluate
 
 # Models
-export UNet, SSC_CNN, Chain
+export UNet, R2UNet, DeeplabV3, ResNet, SSC_CNN, Chain
 
 end
