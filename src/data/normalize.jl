@@ -1,26 +1,8 @@
-struct Normalize
-    μ::Vector{Float64}
-    σ::Vector{Float64}
-end
-
-Flux.@layer Normalize trainable=()
-
-(n::Normalize)(x::AbstractArray) = normalize(x, n.μ, n.σ)
-
-struct DeNormalize
-    μ::Vector{Float64}
-    σ::Vector{Float64}
-end
-
-Flux.@layer DeNormalize trainable=()
-
-(n::DeNormalize)(x::AbstractArray) = denormalize(x, n.μ, n.σ)
-
 function stats(x::AbstractArray)
     data = _extract_bands(x)
     return (map(mean, data), map(std, data))
 end
-function stats(xs::Apollo.TileSampler)
+function stats(xs)
     ms, μ, σ = (0.0, 0.0, 0.0)
     for x in xs
         # Extract Batch Data
@@ -44,18 +26,24 @@ function stats(xs::Apollo.TileSampler)
     return μ, sqrt.(σ)
 end
 
-function normalize(x::AbstractArray{<:T,N}, μ::AbstractVector, σ::AbstractVector) where {T <: AbstractFloat, N}
-    shape = Tuple(ifelse(i == 3, :, 1) for i in 1:N)
+function normalize(x::AbstractArray{<:T,N}, μ::AbstractVector, σ::AbstractVector; dim=3) where {T <: AbstractFloat, N}
+    shape = Tuple(ifelse(i == dim, :, 1) for i in 1:N)
     μ = T.(reshape(μ, shape))
     σ = T.(reshape(σ, shape))
     return (x .- μ) ./ σ
 end
+function normalize(x::AbstractRaster, μ::AbstractVector, σ::AbstractVector; dim=dimnum(x, Band))
+    return Rasters.modify(x -> normalize(x, μ, σ, dim=dim), x)
+end
 
-function denormalize(x::AbstractArray{<:T,N}, μ::AbstractVector, σ::AbstractVector) where {T <: AbstractFloat, N}
-    shape = Tuple(ifelse(i == 3, :, 1) for i in 1:N)
+function denormalize(x::AbstractArray{<:T,N}, μ::AbstractVector, σ::AbstractVector; dim=3) where {T <: AbstractFloat, N}
+    shape = Tuple(ifelse(i == dim, :, 1) for i in 1:N)
     μ = T.(reshape(μ, shape))
     σ = T.(reshape(σ, shape))
     return (x .* σ) .+ μ
+end
+function denormalize(x::AbstractRaster, μ::AbstractVector, σ::AbstractVector; dim=dimnum(x, Band))
+    return Rasters.modify(x -> denormalize(x, μ, σ, dim=dim), x)
 end
 
 _extract_bands(x::AbstractArray{<:Real}) =  _extract_bands(Float64.(x))

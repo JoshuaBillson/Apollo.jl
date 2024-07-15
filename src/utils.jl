@@ -24,7 +24,46 @@ function add_dim(x, ::Type{T}) where {T <: Rasters.DD.Dimension}
     return x
 end
 
-_unzip(x) = map(f -> getfield.(x, f), fieldnames(eltype(x)))
+ones_like(x::AbstractArray{T}) where {T} = ones(T, size(x))
+
+zeros_like(x::AbstractArray{T}) where {T} = zeros(T, size(x))
+
+_crop(x::AbstractArray{<:Any,2}, xdims, ydims) = x[xdims,ydims]
+_crop(x::AbstractArray{<:Any,3}, xdims, ydims) = x[xdims,ydims,:]
+_crop(x::AbstractArray{<:Any,4}, xdims, ydims) = x[xdims,ydims,:,:]
+_crop(x::AbstractArray{<:Any,5}, xdims, ydims) = x[xdims,ydims,:,:,:]
+_crop(x::AbstractArray{<:Any,6}, xdims, ydims) = x[xdims,ydims,:,:,:,:]
+_crop(x::HasDims, xdims, ydims) = x[X(xdims), Y(ydims)]
+
+function _tile(x::AbstractArray, ul::Tuple{Int,Int}, tilesize::Tuple{Int,Int})
+    # Compute Lower-Right Coordinates
+    lr = ul .+ tilesize .- 1
+
+    # Check Bounds
+    any(tilesize .< 1) && throw(ArgumentError("Tile size must be positive!"))
+    (any(ul .< 1) || any(lr .> _tilesize(x))) && throw(ArgumentError("Tile is out of bounds!"))
+
+    # Crop Tile
+    return _crop(x, ul[1]:lr[1], ul[2]:lr[2])
+end
+
+_tilesize(x::HasDims) = size.(Ref(x), (X,Y))
+_tilesize(x::AbstractArray) = size(x)[1:2]
+
+_permute(x, dims) = (Rasters.name(Rasters.dims(x)) == Rasters.name(dims)) ? x : permutedims(x, dims)
+
+_stack(x::Vararg{Any}) = [x...]
+_stack(x::Vararg{HasDims}) = [x...]
+_stack(x::Vararg{AbstractArray{T,N}}) where {T,N} = cat(x..., dims=N)
+_stack(x::AbstractVector{<:AbstractArray}) = _stack(x...)
+_stack(x::AbstractVector{<:Tuple}) = _unzip(x) |> _stack
+_stack(x::AbstractVector{<:Any}) = x
+_stack(x::Tuple) = map(_stack, x)
+
+_unzip(x::AbstractVector) = x
+_unzip(x::AbstractVector{<:Tuple}) = map(f -> getfield.(x, f), fieldnames(eltype(x)))
+
+_unsqueeze(x::AbstractArray) = reshape(x, size(x)..., 1)
 
 _precision(x::AbstractArray{Float16}, precision) = precision == :f16 ? x : _apply_precision(x, precision)
 _precision(x::AbstractArray{Float32}, precision) = precision == :f32 ? x : _apply_precision(x, precision)
@@ -51,10 +90,6 @@ function _pretty_dim_vals(vals::AbstractVector, dim)
         end
     end
 end
-
-_permute(x, dims) = (Rasters.name(Rasters.dims(x)) == Rasters.name(dims)) ? x : permutedims(x, dims)
-
-_stack(x::Vararg{AbstractArray{T,N}}) where {T,N} = cat(x..., dims=N)
 
 _missing_dims(x::AbstractDimArray, dims::Tuple) = filter(dim -> !hasdim(x, dim), dims)
 _missing_dims(dims::Tuple, x::AbstractDimArray) = filter(dim -> !hasdim(dims, dim), Rasters.dims(x))

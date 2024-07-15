@@ -1,38 +1,58 @@
 module Apollo
 
-import Flux, MLUtils, Random
+import Flux, Metalhead, Random
 using Rasters, Match, Statistics
 using Pipe: @pipe
 using Match
 
-const HasDims = Union{<:AbstractDimArray,<:AbstractDimStack}
+const HasDims = Union{<:AbstractRaster,<:AbstractRasterStack}
 
+# Utilities
 include("utils.jl")
 
+# Transforms
+include("data/methods.jl")
 include("data/tensor.jl")
-include("data/samplers.jl")
-include("data/pipeline.jl")
 include("data/normalize.jl")
+include("data/transforms.jl")
 
+# Samplers
+include("data/samplers.jl")
+
+# Views
+include("data/views.jl")
+
+# Models
 include("models/common.jl")
 include("models/chain.jl")
 include("models/unet.jl")
 include("models/ssc_cnn.jl")
 include("models/r2unet.jl")
 
+# Losses
 include("losses.jl")
 
+# Metrics
 include("metrics/common.jl")
 include("metrics/classification.jl")
 include("metrics/regression.jl")
 
 # Utils
-export catlayers, add_dim, folddims, foldlayers, apply
+export catlayers, add_dim, folddims, foldlayers, apply, ones_like, zeros_like
 
 # Data
-export Tensor, TDim, W, H, C, N, L, TShape, WHCN, WHCLN, TDim, Width, Height, Channel, Length, Obs
+export TShape, WHCN, WHCLN
+
+# Transforms
+export DType, Image, Mask, AbstractTransform
+export Tensor, Normalize, DeNormalize, Resample, FilteredTransform, ComposedTransform
+export transform, tensor, normalize, denormalize, resample, upsample, resize, crop
+
+# Samplers
 export TileSampler
-export tensor, raster
+
+# Views
+export MappedView, JoinedView
 
 # Losses
 export binarycrossentropy, mae, mse
