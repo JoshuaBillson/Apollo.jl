@@ -15,6 +15,8 @@ struct TileSampler{D,TS}
     end
 end
 
+is_tile_source(::TileSampler) = true
+
 Base.length(x::TileSampler) = length(x.tiles)
 
 Base.getindex(x::TileSampler, i::Int) = getindex(x, [i]) |> first

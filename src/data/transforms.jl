@@ -19,25 +19,28 @@ Mask(x::Symbol) = Mask{x}()
 
 Apply the transformation `t` to the input `x` with data type `dtype`.
 """
-transform(::AbstractTransform, ::DType, x) = x
-function transform(t::AbstractTransform, dtypes::Tuple, x::Tuple)
-    @assert length(dtypes) == length(x) "Data types don't match data!"
-    return Tuple(transform(t, dtypes[i], x[i]) for i in eachindex(x))
+transform(::AbstractTransform, ::DType, data) = data
+function transform(t::AbstractTransform, dtypes::Tuple, data::Tuple)
+    @assert length(dtypes) == length(data) "Number of types don't match number of sources!"
+    if all(Apollo.is_tile_source, data)
+        return MappedView(batch -> transform(t, dtypes, batch), data)
+    end
+    return Tuple(transform(t, dtypes[i], data[i]) for i in eachindex(data))
 end
 
 # Tensor Transform
 
-struct Tensor{D} <: AbstractTransform
+struct Tensor{D,T} <: AbstractTransform
     layerdim::Type{D}
-    precision::Symbol
+    precision::Type{T}
 end
 
-function Tensor(;precision=:f32, layerdim=Band)
+function Tensor(;precision=Float32, layerdim=Band)
     return Tensor(layerdim, precision)
 end
 
 function transform(t::Tensor, ::DType, x)
-    return tensor(x; precision=t.precision, layerdim=t.layerdim)
+    return tensor(t.precision, x; layerdim=t.layerdim)
 end
 
 # Normalize Transform
