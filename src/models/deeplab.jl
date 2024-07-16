@@ -50,8 +50,8 @@ end
 
 Flux.@layer DeeplabV3
 
-function DeeplabV3(nclasses::Int; channels=3, depth=50, pretrain=false)
-    backbone = ResNet(depth, pretrain=pretrain, channels=channels)
+function DeeplabV3(in_features, nclasses; depth=50, pretrain=false)
+    backbone = ResNet(depth, pretrain=pretrain, channels=in_features)
     return DeeplabV3(
         backbone.input,
         backbone.backbone[1:3],
