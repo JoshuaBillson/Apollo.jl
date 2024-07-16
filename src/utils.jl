@@ -11,8 +11,30 @@ function foldlayers(f, xs::AbstractRasterStack)
     map(f ∘ skipmissing, layers(xs))
 end
 
-function folddims(f, xs::AbstractRaster; dims=Band)
-    map(f ∘ skipmissing, eachslice(xs, dims=dims)).data
+"""
+    folddims(f, xs::AbstractRaster; dim=Band)
+
+Reduce the collection of non-missing values to a singular value in each slice of `x` WRT `dims`.
+
+# Arguments
+- `f`: A function that reduces an array of values to a singular value.
+- `x`: An `AbstractRaster` over which we want to fold.
+- `dims`: The dimension used to generate each slice that is passed to `f`.
+
+# Example
+```julia
+julia> μ = folddims(mean, raster, dims=Band)
+6-element Vector{Float32}:
+ 0.09044644
+ 0.23737456
+ 0.30892986
+ 0.33931717
+ 0.16186203
+ 0.076255515
+```
+"""
+function folddims(f, x::AbstractRaster; dims=Band)
+    map(f ∘ skipmissing, eachslice(x, dims=dims)).data
 end
 
 add_dim(raster, dims::Tuple) = reduce((acc, x) -> add_dim(acc, x), dims, init=raster)
@@ -27,6 +49,36 @@ end
 ones_like(x::AbstractArray{T}) where {T} = ones(T, size(x))
 
 zeros_like(x::AbstractArray{T}) where {T} = zeros(T, size(x))
+
+putobs(x::AbstractArray) = reshape(x, size(x)..., 1)
+
+function dropobs(x::AbstractArray{<:Any,N}) where {N}
+    @assert size(x,N) == 1 "Cannot drop dimension with multiple observations!"
+    dropdims(x, dims=N)
+end
+
+linear_stretch(x::AbstractArray{<:Real,4}, lb, ub) = linear_stretch(dropobs(x), lb, ub)
+function linear_stretch(x::AbstractArray{<:Real,3}, lb::Vector{<:Real}, ub::Vector{<:Real})
+    lb = reshape(lb, (1,1,:))
+    ub = reshape(ub, (1,1,:))
+    return clamp!((x .- lb) ./ (ub .- lb), 0, 1)
+end
+
+rgb(x::AbstractRaster, lb, ub; kwargs...) = rgb(x[X(:),Y(:),Band(:)].data, lb, ub; kwargs...)
+rgb(x::AbstractArray{<:Real,4}, lb, ub; kwargs...) = rgb(dropobs(x), lb, ub; kwargs...)
+function rgb(x::AbstractArray{<:Real,3}, lb, ub; bands=[1,2,3])
+    @pipe linear_stretch(x, lb, ub)[:,:,bands] |>
+    ImageCore.N0f8.(_) |>
+    permutedims(_, (3, 2, 1)) |>
+    ImageCore.colorview(ImageCore.RGB, _)
+end
+
+binmask(x::AbstractArray{<:Real,4}) = binmask(dropobs(x))
+function binmask(x::AbstractArray{<:Real,3})
+    @pipe ImageCore.N0f8.(x) |>
+    permutedims(_, (3, 2, 1)) |>
+    ImageCore.colorview(ImageCore.Gray, _)
+end
 
 _crop(x::AbstractArray{<:Any,2}, xdims, ydims) = x[xdims,ydims]
 _crop(x::AbstractArray{<:Any,3}, xdims, ydims) = x[xdims,ydims,:]
@@ -54,28 +106,16 @@ _permute(x, dims) = (Rasters.name(Rasters.dims(x)) == Rasters.name(dims)) ? x : 
 
 _stack(x::Vararg{Any}) = [x...]
 _stack(x::Vararg{HasDims}) = [x...]
+_stack(x::Vararg{AbstractArray}) = throw(DimensionMismatch("Cannot stack tensors with different dimensions!"))
 _stack(x::Vararg{AbstractArray{T,N}}) where {T,N} = cat(x..., dims=N)
-_stack(x::AbstractVector{<:AbstractArray}) = _stack(x...)
-_stack(x::AbstractVector{<:Tuple}) = _unzip(x) |> _stack
-_stack(x::AbstractVector{<:Any}) = x
-_stack(x::Tuple) = map(_stack, x)
+_stack(x::AbstractVector{<:Any}) = _stack(x...)
+_stack(x::AbstractVector{<:Tuple}) = @pipe _unzip(x) |> map(_stack, _)
 
 _unzip(x::AbstractVector) = x
 _unzip(x::AbstractVector{<:Tuple}) = map(f -> getfield.(x, f), fieldnames(eltype(x)))
 
-_unsqueeze(x::AbstractArray) = reshape(x, size(x)..., 1)
-
-_precision(x::AbstractArray{Float16}, precision) = precision == :f16 ? x : _apply_precision(x, precision)
-_precision(x::AbstractArray{Float32}, precision) = precision == :f32 ? x : _apply_precision(x, precision)
-_precision(x::AbstractArray{Float64}, precision) = precision == :f64 ? x : _apply_precision(x, precision)
-_precision(x::AbstractArray{<:Real}, precision) = _apply_precision(x, precision)
-function _apply_precision(x::AbstractArray{<:Real}, precision)
-    @match precision begin
-        :f16 => Float16.(x)
-        :f32 => Float32.(x)
-        :f64 => Float64.(x)
-    end
-end
+_precision(::Type{T}, x::AbstractArray{T}) where {T} = x 
+_precision(::Type{T}, x::AbstractArray) where {T} = T.(x)
 
 _dim_vals(x::AbstractDimStack, dim) = @pipe map(x -> _dim_vals(x, dim), layers(x)) |> reduce(vcat, _)
 _dim_vals(x::AbstractDimArray, dim) = hasdim(x, dim) ? collect(dims(x, dim)) : Rasters.name(x)
@@ -88,23 +128,5 @@ function _pretty_dim_vals(vals::AbstractVector, dim)
             x::Symbol => x
             _ => throw(ArgumentError("Non-Categorical Dimension!"))
         end
-    end
-end
-
-_missing_dims(x::AbstractDimArray, dims::Tuple) = filter(dim -> !hasdim(x, dim), dims)
-_missing_dims(dims::Tuple, x::AbstractDimArray) = filter(dim -> !hasdim(dims, dim), Rasters.dims(x))
-
-"Check that raster contains all of the dimensions in `dims` with no extra dimensions."
-function _dims_match(raster::AbstractDimArray, dims)
-    # Check That Raster Contains all Dims
-    missing_dims = _missing_dims(raster, dims)
-    if !isempty(missing_dims)
-        throw(ArgumentError("Raster is missing dimension `$(Rasters.name(first(missing_dims)))`!"))
-    end
-
-    # Check That Raster Doesn't Have Extra Dims
-    missing_dims = _missing_dims(dims, raster)
-    if !isempty(missing_dims)
-        throw(ArgumentError("Raster has extra dimension `$(Rasters.name(first(missing_dims)))`!"))
     end
 end

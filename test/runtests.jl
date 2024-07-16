@@ -16,8 +16,8 @@ using Rasters
     @test size(tensor(t2)) == (128, 128, 3, 9, 1)
     @test size(tensor(t1, t2)) == (128, 128, 3, 9, 2)
     @test size(tensor(b, b)) == (256, 256, 1, 2)  # Missing Bands
-    @test_throws ArgumentError tensor(x, y, t1)  # Extra Dimension
-    @test_throws ArgumentError tensor(t1, t2, x)  # Missing Dimension
-    @test_throws ArgumentError tensor(x, y, b)  # Mismatched Sizes
-    @test_throws ArgumentError tensor(x, y, z)  # Mismatched Sizes
+    @test_throws DimensionMismatch tensor(x, y, t1)  # Extra Dimension
+    @test_throws DimensionMismatch tensor(t1, t2, x)  # Missing Dimension
+    @test_throws DimensionMismatch tensor(x, y, b)  # Mismatched Sizes
+    @test_throws DimensionMismatch tensor(x, y, z)  # Mismatched Sizes
 end

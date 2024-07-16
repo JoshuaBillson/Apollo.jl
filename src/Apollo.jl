@@ -1,6 +1,6 @@
 module Apollo
 
-import Flux, Metalhead, Random
+import Flux, Metalhead, ImageCore, Random
 using Rasters, Match, Statistics
 using Pipe: @pipe
 using Match
@@ -10,17 +10,17 @@ const HasDims = Union{<:AbstractRaster,<:AbstractRasterStack}
 # Utilities
 include("utils.jl")
 
-# Transforms
-include("data/methods.jl")
-include("data/tensor.jl")
-include("data/normalize.jl")
-include("data/transforms.jl")
-
 # Samplers
 include("data/samplers.jl")
 
 # Views
 include("data/views.jl")
+
+# Transforms
+include("data/methods.jl")
+include("data/tensor.jl")
+include("data/normalize.jl")
+include("data/transforms.jl")
 
 # Models
 include("models/common.jl")
@@ -54,7 +54,7 @@ export transform, tensor, normalize, denormalize, resample, upsample, resize, cr
 export TileSampler
 
 # Views
-export MappedView, JoinedView
+export MappedView, JoinedView, ObsView, splitobs
 
 # Losses
 export binarycrossentropy, mae, mse
