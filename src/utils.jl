@@ -1,6 +1,3 @@
-apply(f, x) = f(x)
-apply(f, x::AbstractVector) = map(f, x)
-
 function catlayers(x::AbstractDimStack, ::Type{D}) where {D <: Rasters.Dimension}
     dim_vals = @pipe _dim_vals(x, D) |> _pretty_dim_vals(_, D)
     newdim = allunique(dim_vals) ? D(dim_vals) : D(1:length(dim_vals))

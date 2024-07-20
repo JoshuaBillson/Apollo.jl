@@ -19,7 +19,14 @@ function resize(x::HasDims, newsize, method=:bilinear)
     return Rasters.resample(x, size=newsize, method=method)
 end
 
-function crop(x::HasDims, cropsize)
+"""
+    crop(x::AbstractArray, size, ul=(1,1))
+
+Crop a tile equal to `size` out of `x` with an upper-left corner defined by `ul`.
+"""
+crop(x::AbstractArray, size::Int, ul=(1,1)) = crop(x, (size, size), ul)
+function crop(x::AbstractArray, size::Tuple{Int,Int}, ul=(1,1))
+    return _crop(x, ul[1]:ul[1]+size[1]-1, ul[2]:ul[2]+size[2]-1)
 end
 
 function _check_resample_method(method)

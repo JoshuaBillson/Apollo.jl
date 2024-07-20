@@ -11,6 +11,7 @@ const HasDims = Union{<:AbstractRaster,<:AbstractRasterStack}
 include("utils.jl")
 
 # Samplers
+include("data/common.jl")
 include("data/samplers.jl")
 
 # Views
@@ -43,18 +44,17 @@ include("metrics/regression.jl")
 export catlayers, add_dim, folddims, foldlayers, apply, ones_like, zeros_like
 
 # Data
-export TShape, WHCN, WHCLN
 
 # Transforms
 export DType, Image, Mask, AbstractTransform
-export Tensor, Normalize, DeNormalize, Resample, FilteredTransform, ComposedTransform
-export transform, tensor, normalize, denormalize, resample, upsample, resize, crop
+export Tensor, Normalize, DeNormalize, Resample, Crop, RandomCrop, FilteredTransform, ComposedTransform
+export transform, apply, tensor, normalize, denormalize, resample, upsample, resize, crop
 
 # Samplers
-export TileSampler
+export TileSource, TileSampler, TileSeq
 
 # Views
-export MappedView, JoinedView, ObsView, splitobs
+export MappedView, JoinedView, ObsView, splitobs, zipobs, repeatobs
 
 # Losses
 export binarycrossentropy, mae, mse
