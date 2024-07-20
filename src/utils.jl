@@ -70,11 +70,12 @@ function rgb(x::AbstractArray{<:Real,3}, lb, ub; bands=[1,2,3])
     ImageCore.colorview(ImageCore.RGB, _)
 end
 
-binmask(x::AbstractArray{<:Real,4}) = binmask(dropobs(x))
-function binmask(x::AbstractArray{<:Real,3})
+binmask(x::AbstractArray{<:Real,4}) = binmask(reshape(x, size(x)[1:2]))
+binmask(x::AbstractArray{<:Real,3}) = binmask(reshape(x, size(x)[1:2]))
+function binmask(x::AbstractArray{<:Real,2})
     @pipe ImageCore.N0f8.(x) |>
-    permutedims(_, (3, 2, 1)) |>
-    ImageCore.colorview(ImageCore.Gray, _)
+    permutedims(_, (2, 1)) |>
+    ImageCore.Gray.(_)
 end
 
 _crop(x::AbstractArray{<:Any,2}, xdims, ydims) = x[xdims,ydims]
