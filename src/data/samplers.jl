@@ -1,23 +1,21 @@
-struct TileSampler{T<:DType,TS,D<:HasDims}
+struct TileSampler{D<:HasDims,TS}
     data::D
-    dtype::T
     tiles::Vector{Tuple{Int,Int}}
     tilesize::Int
 
-    function TileSampler(data::D, dtype::T, tilesize::Int; kwargs...) where {D<:HasDims,T<:DType}
-        return TileSampler{T,tilesize,D}(data, dtype, tilesize; kwargs...)
+    function TileSampler(data::D, tilesize::Int; kwargs...) where {D<:HasDims}
+        return TileSampler{D,tilesize}(data, tilesize; kwargs...)
     end
-    function TileSampler{T,TS,D}(data::D, dtype::T, tilesize::Int; stride=tilesize) where {T<:DType,TS,D<:HasDims}
+    function TileSampler{D,TS}(data::D, tilesize::Int; stride=tilesize) where {TS,D<:HasDims}
         width, height = map(x -> size(data, x), (X,Y))
         xvals = 1:stride:width-TS+1
         yvals = 1:stride:height-TS+1
         tiles = [(x, y) for x in xvals for y in yvals]
-        return new{T,TS,D}(data, dtype, tiles, tilesize)
+        return new{D,TS}(data, tiles, tilesize)
     end
 end
 
 is_tile_source(::TileSampler) = true
-dtype(x::TileSampler{T}) where {T<:DType} = x.dtype
 
 Base.length(x::TileSampler) = length(x.tiles)
 
@@ -35,13 +33,8 @@ function Base.show(io::IO, x::TileSampler{D,TS}) where {D, TS}
     printstyled(io, "TileSampler(tile_size=$TS, num_tiles=$(length(x)))")
 end
 
-struct TileSeq{T<:DType,D} <: TileSource
-    dtype::T
+struct TileSeq{D} <: TileSource
     tiles::D
-end
-
-function TileSeq(tiles::D, dtype::T) where {D<:AbstractVector, T<:DType}
-    return TileSeq{T,D}(dtype, tiles)
 end
 
 function _tiles(s::TileSampler{D,TS}, i::AbstractVector) where {D,TS}

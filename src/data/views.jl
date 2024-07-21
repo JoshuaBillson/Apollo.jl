@@ -8,9 +8,6 @@ is_tile_source(::Any) = false
 is_tile_source(x::AbstractIterator) = is_tile_source(data(x))
 is_tile_source(x::AbstractIterator{<:Tuple}) = all(map(is_tile_source, data(x)))
 
-dtype(::Any) = Any
-dtype(x::AbstractIterator) = dtype(data(x))
-
 function Base.getindex(x::AbstractIterator, i::AbstractVector)
     dst = [Ref{Any}() for _ in i]
     Threads.@threads for j in eachindex(dst)
@@ -28,15 +25,12 @@ Base.keys(x::AbstractIterator) = Base.OneTo(length(x))
 
 # MappedView
 
-struct MappedView{F,D} <: AbstractIterator{D}
+struct MappedView{F<:Function,D} <: AbstractIterator{D}
     f::F
     data::D
-
-    MappedView(f::Function, data::Tuple) = MappedView(f, ObsView(data, eachindex(first(data))))
-    function MappedView(f::F, data::D) where {F<:Function,D}
-        new{F,D}(f, data)
-    end
 end
+
+MappedView(f::Function, data::Tuple) = MappedView(f, ObsView(data, eachindex(first(data))))
 
 Base.length(x::MappedView) = length(data(x))
 
@@ -50,8 +44,6 @@ struct JoinedView{D} <: AbstractIterator{D}
     JoinedView(data...) = JoinedView(data)
     JoinedView(data::D) where {D <: Tuple} = new{D}(data)
 end
-
-dtype(x::JoinedView{<:Tuple}) = data(x) |> first |> dtype
 
 Base.length(x::JoinedView) = map(length, x.data) |> sum
 
@@ -135,6 +127,12 @@ end
 zipobs(data...) = ObsView(data, eachindex(first(data)))
 
 repeatobs(data, n::Int) = JoinedView([data for _ in 1:n]...)
+
+keepobs(data, obs::AbstractVector{Int}) = ObsView(data, obs)
+
+dropobs(data, obs::AbstractVector{Int}) = keepobs(data, filter(x -> !(x in obs), eachindex(data)))
+
+filterobs(f, data) = keepobs(data, findall(map(f, data)))
 
 _breakpoints(n::Int, at::Tuple) = round.(Int, cumsum(at) .* n)
 _breakpoints(n::Int, at::Real) = _breakpoints(n, (at,))

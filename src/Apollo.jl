@@ -54,7 +54,8 @@ export transform, apply, tensor, normalize, denormalize, resample, upsample, res
 export TileSource, TileSampler, TileSeq
 
 # Views
-export MappedView, JoinedView, ObsView, splitobs, zipobs, repeatobs
+export MappedView, JoinedView, ObsView
+export splitobs, zipobs, repeatobs, keepobs, dropobs, filterobs
 
 # Losses
 export binarycrossentropy, mae, mse

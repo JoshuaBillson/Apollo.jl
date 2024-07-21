@@ -18,10 +18,8 @@ Apply the transformation `t` to the input `x` with data type `dtype`.
 """
 
 transform(t::AbstractTransform, dtype, data) = apply(t, dtype, data, rand(1:1000))
-function transform(t::AbstractTransform, data::AbstractIterator)
-    @assert is_tile_source(data)
-    _dtype = dtype(data)
-    return MappedView(batch -> transform(t, _dtype, batch), data)
+function transform(t::AbstractTransform, dtype, data::AbstractIterator)
+    return MappedView(batch -> transform(t, dtype, batch), data)
 end
 
 apply(::AbstractTransform, ::DType, data, ::Int) = data
