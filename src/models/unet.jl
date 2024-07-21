@@ -42,7 +42,18 @@ struct UNet
     head
 end
 
-function UNet(in_features, n_classes; batch_norm=false)
+function UNet(channels, nclasses; batch_norm=false, backbone=nothing, pretrain=false)
+    @match backbone begin
+        ::Nothing => unet(channels, nclasses; batch_norm=batch_norm)
+        :ResNet18 => unet(ResNet(18; pretrain=pretrain, channels=channels), nclasses; batch_norm=batch_norm)
+        :ResNet34 => unet(ResNet(34; pretrain=pretrain, channels=channels), nclasses; batch_norm=batch_norm)
+        :ResNet50 => unet(ResNet(50; pretrain=pretrain, channels=channels), nclasses; batch_norm=batch_norm)
+        :ResNet101 => unet(ResNet(101; pretrain=pretrain, channels=channels), nclasses; batch_norm=batch_norm)
+        :ResNet152 => unet(ResNet(152; pretrain=pretrain, channels=channels), nclasses; batch_norm=batch_norm)
+    end
+end
+
+function unet(in_features, n_classes; batch_norm=false)
     return UNet(
         UNetEncoder(in_features, 64, batch_norm, downsample=false),  # Encoder 1
         UNetEncoder(64, 128, batch_norm),                            # Encoder 2
@@ -65,26 +76,27 @@ function UNet(in_features, n_classes; batch_norm=false)
     )
 end
 
-function UNet(backbone::ResNet, n_classes; batch_norm=false)
+function unet(backbone::ResNet, n_classes; batch_norm=false)
+    bfs = backbone.depth in [18, 34] ? [64, 64, 128, 256, 512] : [64, 256, 512, 1024, 2048]
     return UNet(
-        backbone.input,                        # Encoder 1
-        backbone.backbone[1],                  # Encoder 2
-        backbone.backbone[2],                  # Encoder 3
-        backbone.backbone[3],                  # Encoder 4
+        backbone.input,                                 # Encoder 1
+        backbone.backbone[1],                           # Encoder 2
+        backbone.backbone[2],                           # Encoder 3
+        backbone.backbone[3],                           # Encoder 4
 
-        UNetDecoder(128, 64, batch_norm),      # Decoder 1
-        UNetDecoder(512, 256, batch_norm),     # Decoder 2
-        UNetDecoder(1024, 512, batch_norm),    # Decoder 3
-        UNetDecoder(2048, 1024, batch_norm),   # Decoder 4
+        UNetDecoder(bfs[1]*2, bfs[1], batch_norm),      # Decoder 1
+        UNetDecoder(bfs[2]*2, bfs[2], batch_norm),      # Decoder 2
+        UNetDecoder(bfs[3]*2, bfs[3], batch_norm),      # Decoder 3
+        UNetDecoder(bfs[4]*2, bfs[4], batch_norm),      # Decoder 4
 
-        UNetUp(256, 64),                       # Up 1
-        UNetUp(512, 256),                      # Up 2
-        UNetUp(1024, 512),                     # Up 3
-        UNetUp(2048, 1024),                    # Up 4
+        UNetUp(bfs[2], bfs[1]),                         # Up 1
+        UNetUp(bfs[3], bfs[2]),                         # Up 2
+        UNetUp(bfs[4], bfs[3]),                         # Up 3
+        UNetUp(bfs[5], bfs[4]),                         # Up 4
 
-        backbone.backbone[4],                  # Backbone
+        backbone.backbone[4],                           # Backbone
 
-        Flux.Conv((1,1), 64=>n_classes)        # Classification Head
+        Flux.Conv((1,1), 64=>n_classes)                 # Classification Head
     )
 end
 

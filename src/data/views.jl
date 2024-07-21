@@ -124,6 +124,10 @@ function splitobs(data::AbstractVector{Int}; at=0.8, shuffle=true)
     return [indices[s:e] for (s, e) in zip(starts, ends)]
 end
 
+_breakpoints(n::Int, at::Tuple) = round.(Int, cumsum(at) .* n)
+_breakpoints(n::Int, at::Real) = _breakpoints(n, (at,))
+_breakpoints(n::Int, at::AbstractVector) = _breakpoints(n, Tuple(at))
+
 zipobs(data...) = ObsView(data, eachindex(first(data)))
 
 repeatobs(data, n::Int) = JoinedView([data for _ in 1:n]...)
@@ -134,6 +138,4 @@ dropobs(data, obs::AbstractVector{Int}) = keepobs(data, filter(x -> !(x in obs),
 
 filterobs(f, data) = keepobs(data, findall(map(f, data)))
 
-_breakpoints(n::Int, at::Tuple) = round.(Int, cumsum(at) .* n)
-_breakpoints(n::Int, at::Real) = _breakpoints(n, (at,))
-_breakpoints(n::Int, at::AbstractVector) = _breakpoints(n, Tuple(at))
+mapobs(f, data) = MappedView(f, data)

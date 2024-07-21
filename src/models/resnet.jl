@@ -1,4 +1,5 @@
 struct ResNet{I,B,H}
+    depth::Int
     input::I
     backbone::B
     head::H
@@ -7,6 +8,7 @@ end
 Flux.@layer ResNet
 
 function ResNet(depth::Int; pretrain=false, channels=3, nclasses=1000)
+    @assert depth in [18, 34, 50, 101, 152]
     if pretrain
         pretrained = Metalhead.ResNet(depth, pretrain=true, inchannels=3, nclasses=nclasses)
         input = ConvBlock((3,3), channels, 64, Flux.relu, batch_norm=true)
@@ -15,7 +17,7 @@ function ResNet(depth::Int; pretrain=false, channels=3, nclasses=1000)
         backbone_1 = Flux.Chain(Flux.MaxPool((2,2)), Metalhead.backbone(pretrained)[2]...)
         backbone = Flux.Chain(backbone_1,  Metalhead.backbone(pretrained)[3:end]...)
         head = Metalhead.classifier(pretrained)
-        return ResNet(input, backbone, head)
+        return ResNet(depth, input, backbone, head)
     else
         base = Metalhead.ResNet(depth, pretrain=false, inchannels=channels, nclasses=nclasses)
         input = ConvBlock((3,3), channels, 64, Flux.relu, batch_norm=true)
@@ -23,7 +25,7 @@ function ResNet(depth::Int; pretrain=false, channels=3, nclasses=1000)
         #input = Metalhead.backbone(base)[1][1:2]
         #backbone = Flux.Chain(Flux.Chain(Flux.MaxPool((3, 3), pad=1, stride=2), p_backbone[2]...), p_backbone[3:end]...)
         head = Metalhead.classifier(base)
-        return ResNet(input, backbone, head)
+        return ResNet(depth, input, backbone, head)
     end
 end
 
