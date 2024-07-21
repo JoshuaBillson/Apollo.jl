@@ -33,8 +33,8 @@ Flux.@functor(SSC_CNN)
 
 function (m::SSC_CNN)(lr::AbstractArray{Float32,4}, hr::AbstractArray{Float32,4})
     # Upsample LR Bands
-    lr_up = Flux.upsample_bilinear(lr, (2, 2))
-    x = cat(lr_up, hr, dims=3)
+    #lr_up = Flux.upsample_bilinear(lr, (2, 2))
+    x = cat(lr, hr, dims=3)
 
     # Encoder Forward
     e1 = m.enc1(x)
@@ -56,7 +56,7 @@ function (m::SSC_CNN)(lr::AbstractArray{Float32,4}, hr::AbstractArray{Float32,4}
 
     # Residual Out
     residual = m.head(d1)
-    return residual .+ lr_up
+    return residual .+ lr
 end
 
 function (m::SSC_CNN)(lr::AbstractDimArray, hr::AbstractDimArray)
