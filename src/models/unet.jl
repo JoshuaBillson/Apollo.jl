@@ -1,5 +1,13 @@
-function UNetEncoder(in_features::Int, out_features::Int, batch_norm)
-    ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+function UNetEncoder(in_features::Int, out_features::Int, batch_norm; downsample=true)
+    if downsample
+        Flux.Chain(
+            Flux.MaxPool((2,2)), 
+            ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+        )
+    else
+        ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+    end
+
 end
 
 function UNetDecoder(in_features::Int, out_features::Int, batch_norm)
@@ -7,7 +15,10 @@ function UNetDecoder(in_features::Int, out_features::Int, batch_norm)
 end
 
 function UNetBackbone(in_features::Int, out_features::Int, batch_norm)
-    ConvBlock((3,3), in_features, out_features, Flux.relu; batch_norm=batch_norm)
+    Flux.Chain(
+        Flux.MaxPool((2,2)), 
+        ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+    )
 end
 
 function UNetUp(in_features::Int, out_features::Int)
@@ -33,36 +44,59 @@ end
 
 function UNet(in_features, n_classes; batch_norm=false)
     return UNet(
-        UNetEncoder(in_features, 64, batch_norm),  # Encoder 1
-        UNetEncoder(64, 128, batch_norm),          # Encoder 2
-        UNetEncoder(128, 256, batch_norm),         # Encoder 3
-        UNetEncoder(256, 512, batch_norm),         # Encoder 4
+        UNetEncoder(in_features, 64, batch_norm, downsample=false),  # Encoder 1
+        UNetEncoder(64, 128, batch_norm),                            # Encoder 2
+        UNetEncoder(128, 256, batch_norm),                           # Encoder 3
+        UNetEncoder(256, 512, batch_norm),                           # Encoder 4
 
-        UNetDecoder(128, 64, batch_norm),          # Decoder 1
-        UNetDecoder(256, 128, batch_norm),         # Decoder 2
-        UNetDecoder(512, 256, batch_norm),         # Decoder 3
-        UNetDecoder(1024, 512, batch_norm),        # Decoder 4
+        UNetDecoder(128, 64, batch_norm),                            # Decoder 1
+        UNetDecoder(256, 128, batch_norm),                           # Decoder 2
+        UNetDecoder(512, 256, batch_norm),                           # Decoder 3
+        UNetDecoder(1024, 512, batch_norm),                          # Decoder 4
 
-        UNetUp(128, 64),                           # Up 1
-        UNetUp(256, 128),                          # Up 2
-        UNetUp(512, 256),                          # Up 3
-        UNetUp(1024, 512),                         # Up 4
+        UNetUp(128, 64),                                             # Up 1
+        UNetUp(256, 128),                                            # Up 2
+        UNetUp(512, 256),                                            # Up 3
+        UNetUp(1024, 512),                                           # Up 4
 
-        UNetBackbone(512, 1024, batch_norm),       # Backbone
+        UNetBackbone(512, 1024, batch_norm),                         # Backbone
 
-        Flux.Conv((1,1), 64=>n_classes)            # Classification Head
+        Flux.Conv((1,1), 64=>n_classes)                              # Classification Head
+    )
+end
+
+function UNet(backbone::ResNet, n_classes; batch_norm=false)
+    return UNet(
+        backbone.input,                        # Encoder 1
+        backbone.backbone[1],                  # Encoder 2
+        backbone.backbone[2],                  # Encoder 3
+        backbone.backbone[3],                  # Encoder 4
+
+        UNetDecoder(128, 64, batch_norm),      # Decoder 1
+        UNetDecoder(512, 256, batch_norm),     # Decoder 2
+        UNetDecoder(1024, 512, batch_norm),    # Decoder 3
+        UNetDecoder(2048, 1024, batch_norm),   # Decoder 4
+
+        UNetUp(256, 64),                       # Up 1
+        UNetUp(512, 256),                      # Up 2
+        UNetUp(1024, 512),                     # Up 3
+        UNetUp(2048, 1024),                    # Up 4
+
+        backbone.backbone[4],                  # Backbone
+
+        Flux.Conv((1,1), 64=>n_classes)        # Classification Head
     )
 end
 
 Flux.@layer UNet
 
-function Flux.activations(m::UNet, x)
+function Apollo.activations(m::UNet, x)
     # Encoder Forward
     enc1 = m.encoder1(x)
-    enc2 = Flux.maxpool(enc1, (2,2)) |> m.encoder2
-    enc3 = Flux.maxpool(enc2, (2,2)) |> m.encoder3
-    enc4 = Flux.maxpool(enc3, (2,2)) |> m.encoder4
-    bottleneck = Flux.maxpool(enc4, (2,2)) |> m.backbone
+    enc2 = m.encoder2(enc1)
+    enc3 = m.encoder3(enc2)
+    enc4 = m.encoder4(enc3)
+    bottleneck = m.backbone(enc4)
 
     # Decoder Forward
     dec4 = @pipe m.up4(bottleneck) |> cat(_, enc4, dims=3) |> m.decoder4
@@ -82,7 +116,7 @@ function Flux.activations(m::UNet, x)
     )
 end
 
-(m::UNet)(x::AbstractArray{<:Real,4}) = Flux.activations(m, x).prediction
+(m::UNet)(x::AbstractArray{<:Real,4}) = Apollo.activations(m, x).prediction
 function (m::UNet)(x::AbstractDimArray)
     prediction = m(tensor(WHCN, x))
     newdims = (dims(x, X), dims(x, Y), Band(1:size(prediction,3)))

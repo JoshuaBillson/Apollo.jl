@@ -56,9 +56,9 @@ function DeeplabV3(in_features, nclasses; depth=50, pretrain=false)
         backbone.input,
         backbone.backbone[1:3],
         ASPP(1024), 
-        Flux.Chain(Flux.Conv((1,1), 256=>48), Flux.BatchNorm(48, Flux.relu)), 
-        Flux.Chain(Flux.Conv((3,3), 304=>256, pad=Flux.SamePad()), Flux.BatchNorm(256, Flux.relu)), 
-        Flux.Chain(Flux.Conv((3,3), 256=>256, pad=Flux.SamePad()), Flux.BatchNorm(256, Flux.relu)), 
+        Conv((1,1), 256, 48, Flux.relu, batch_norm=true),
+        Conv((3,3), 304, 256, Flux.relu, batch_norm=true),
+        Conv((3,3), 256, 256, Flux.relu, batch_norm=true),
         Flux.Conv((1,1), 256=>nclasses),
     )
 end
@@ -77,7 +77,7 @@ function (m::DeeplabV3)(x)
     concat = cat(input_a, input_b, dims=3)
 
     # Decoder Out
-    decoder_out = @pipe m.decoder2(concat) |> m.decoder3(_) |> Flux.upsample_bilinear(_, 4)
+    decoder_out = @pipe m.decoder2(concat) |> m.decoder3(_) |> Flux.upsample_bilinear(_, 2)
 
     # Classification Head
     return m.head(decoder_out)
