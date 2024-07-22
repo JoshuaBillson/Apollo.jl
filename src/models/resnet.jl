@@ -1,41 +1,114 @@
-struct ResNet{I,B,H}
-    depth::Int
-    input::I
-    backbone::B
-    head::H
+struct ResNet18{C2,C3,C4,C5}
+    conv2::C2
+    conv3::C3
+    conv4::C4
+    conv5::C5
 end
 
-Flux.@layer ResNet
+Flux.@layer ResNet18
 
-function ResNet(depth::Int; pretrain=false, channels=3, nclasses=1000)
-    @assert depth in [18, 34, 50, 101, 152]
-    if pretrain
-        pretrained = Metalhead.ResNet(depth, pretrain=true, inchannels=3, nclasses=nclasses)
-        input = ConvBlock((3,3), channels, 64, Flux.relu, batch_norm=true)
-        #input = Flux.Chain(Flux.Conv((7, 7), channels => 64, pad=3, stride=2, bias=false), Flux.BatchNorm(64, Flux.relu))
-        #backbone = Flux.Chain(Flux.Chain(Flux.MaxPool((3, 3), pad=1, stride=2), p_backbone[2]...), p_backbone[3:end]...)
-        backbone_1 = Flux.Chain(Flux.MaxPool((2,2)), Metalhead.backbone(pretrained)[2]...)
-        backbone = Flux.Chain(backbone_1,  Metalhead.backbone(pretrained)[3:end]...)
-        head = Metalhead.classifier(pretrained)
-        return ResNet(depth, input, backbone, head)
-    else
-        base = Metalhead.ResNet(depth, pretrain=false, inchannels=channels, nclasses=nclasses)
-        input = ConvBlock((3,3), channels, 64, Flux.relu, batch_norm=true)
-        backbone = Metalhead.backbone(base)[2:end]
-        #input = Metalhead.backbone(base)[1][1:2]
-        #backbone = Flux.Chain(Flux.Chain(Flux.MaxPool((3, 3), pad=1, stride=2), p_backbone[2]...), p_backbone[3:end]...)
-        head = Metalhead.classifier(base)
-        return ResNet(depth, input, backbone, head)
-    end
+ResNet18(;pretrain=false) = resnet(ResNet18, 18, pretrain)
+
+filters(::Type{<:ResNet18}) = [64, 64, 128, 256, 512]
+
+function (m::ResNet18)(x)
+    x1 = m.conv2(x)
+    x2 = m.conv3(x1)
+    x3 = m.conv4(x2)
+    x4 = m.conv5(x3)
+    return (x, x1, x2, x3, x4)
 end
 
-function activations(m::ResNet, x)
-    input_out = m.input(x)
-    backbone_out = Flux.activations(m.backbone, input_out)
-    head_out = last(backbone_out) |> m.head
-    return Tuple([input_out, backbone_out..., head_out])
+struct ResNet34{C2,C3,C4,C5}
+    conv2::C2
+    conv3::C3
+    conv4::C4
+    conv5::C5
 end
 
-function (m::ResNet)(x)
-    return m.input(x) |> m.backbone |> m.head
+Flux.@layer ResNet34
+
+ResNet34(;pretrain=false) = resnet(ResNet34, 34, pretrain)
+
+filters(::Type{<:ResNet34}) = [64, 64, 128, 256, 512]
+
+function (m::ResNet34)(x)
+    x1 = m.conv2(x)
+    x2 = m.conv3(x1)
+    x3 = m.conv4(x2)
+    x4 = m.conv5(x3)
+    return (x, x1, x2, x3, x4)
+end
+
+struct ResNet50{C2,C3,C4,C5}
+    conv2::C2
+    conv3::C3
+    conv4::C4
+    conv5::C5
+end
+
+Flux.@layer ResNet50
+
+ResNet50(;pretrain=false) = resnet(ResNet50, 50, pretrain)
+
+filters(::Type{<:ResNet50}) = [64, 256, 512, 1024, 2048]
+
+function (m::ResNet50)(x)
+    x1 = m.conv2(x)
+    x2 = m.conv3(x1)
+    x3 = m.conv4(x2)
+    x4 = m.conv5(x3)
+    return (x, x1, x2, x3, x4)
+end
+
+struct ResNet101{C2,C3,C4,C5}
+    conv2::C2
+    conv3::C3
+    conv4::C4
+    conv5::C5
+end
+
+Flux.@layer ResNet101
+
+ResNet101(;pretrain=false) = resnet(ResNet101, 101, pretrain)
+
+filters(::Type{<:ResNet101}) = [64, 256, 512, 1024, 2048]
+
+function (m::ResNet101)(x)
+    x1 = m.conv2(x)
+    x2 = m.conv3(x1)
+    x3 = m.conv4(x2)
+    x4 = m.conv5(x3)
+    return (x, x1, x2, x3, x4)
+end
+
+struct ResNet152{C2,C3,C4,C5}
+    conv2::C2
+    conv3::C3
+    conv4::C4
+    conv5::C5
+end
+
+Flux.@layer ResNet152
+
+ResNet152(;pretrain=false) = resnet(ResNet152, 152, pretrain)
+
+filters(::Type{<:ResNet152}) = [64, 256, 512, 1024, 2048]
+
+function (m::ResNet152)(x)
+    x1 = m.conv2(x)
+    x2 = m.conv3(x1)
+    x3 = m.conv4(x2)
+    x4 = m.conv5(x3)
+    return (x, x1, x2, x3, x4)
+end
+
+function resnet(::Type{T}, depth, pretrain) where {T}
+    backbone = Metalhead.ResNet(depth, pretrain=pretrain) |> Metalhead.backbone
+    return T(
+        Flux.Chain(Flux.MaxPool((2,2)), backbone[2]...), 
+        backbone[3], 
+        backbone[4], 
+        backbone[5], 
+    )
 end

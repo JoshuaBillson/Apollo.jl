@@ -1,58 +1,91 @@
-function UNetEncoder(in_features::Int, out_features::Int, batch_norm; downsample=true)
-    if downsample
-        Flux.Chain(
-            Flux.MaxPool((2,2)), 
-            ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
-        )
-    else
-        ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
-    end
-
+struct Input{C}
+    conv::C
 end
 
-function UNetDecoder(in_features::Int, out_features::Int, batch_norm)
-    ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+function Input(channels::Int; batch_norm=true)
+    return Input(ConvBlock((3,3), channels, 64, Flux.relu, batch_norm=batch_norm))
 end
 
-function UNetBackbone(in_features::Int, out_features::Int, batch_norm)
-    Flux.Chain(
-        Flux.MaxPool((2,2)), 
-        ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+Flux.@layer Input
+
+function (m::Input)(x)
+    return m.conv(x)
+end
+
+struct DecoderBlock{U,C}
+    up::U
+    conv::C
+end
+
+Flux.@layer DecoderBlock
+
+function DecoderBlock(up_channels, skip_channels, filters; batch_norm=false)
+    return DecoderBlock(
+        Flux.ConvTranspose((2,2), up_channels=>filters, stride=2), 
+        ConvBlock((3,3), filters+skip_channels, filters, Flux.relu, batch_norm=batch_norm)
     )
 end
 
-function UNetUp(in_features::Int, out_features::Int)
-    Flux.ConvTranspose((2,2), in_features=>out_features, stride=2)
+function (m::DecoderBlock)(up, skip)
+    return @pipe m.up(up) |> cat(_, skip, dims=3) |> m.conv
 end
 
-struct UNet
-    encoder1
-    encoder2
-    encoder3
-    encoder4
-    decoder1
-    decoder2
-    decoder3
-    decoder4
-    up1
-    up2
-    up3
-    up4
-    backbone
-    head
+struct Decoder{D1,D2,D3,D4}
+    decoder1::D1
+    decoder2::D2
+    decoder3::D3
+    decoder4::D4
 end
 
-function UNet(channels, nclasses; batch_norm=false, backbone=nothing, pretrain=false)
-    @match backbone begin
-        ::Nothing => unet(channels, nclasses; batch_norm=batch_norm)
-        :ResNet18 => unet(ResNet(18; pretrain=pretrain, channels=channels), nclasses; batch_norm=batch_norm)
-        :ResNet34 => unet(ResNet(34; pretrain=pretrain, channels=channels), nclasses; batch_norm=batch_norm)
-        :ResNet50 => unet(ResNet(50; pretrain=pretrain, channels=channels), nclasses; batch_norm=batch_norm)
-        :ResNet101 => unet(ResNet(101; pretrain=pretrain, channels=channels), nclasses; batch_norm=batch_norm)
-        :ResNet152 => unet(ResNet(152; pretrain=pretrain, channels=channels), nclasses; batch_norm=batch_norm)
-    end
+Flux.@layer Decoder
+
+function Decoder(up_channels, skip_channels, filters; batch_norm=false)
+    Decoder(
+        DecoderBlock(up_channels[1], skip_channels[1], filters[1]; batch_norm=batch_norm), 
+        DecoderBlock(up_channels[2], skip_channels[2], filters[2]; batch_norm=batch_norm), 
+        DecoderBlock(up_channels[3], skip_channels[3], filters[3]; batch_norm=batch_norm), 
+        DecoderBlock(up_channels[4], skip_channels[4], filters[4]; batch_norm=batch_norm), 
+    )
 end
 
+function(m::Decoder)(x1, x2, x3, x4, x5)
+    decoder_4 = m.decoder4(x5, x4)
+    decoder_3 = m.decoder3(decoder_4, x3)
+    decoder_2 = m.decoder2(decoder_3, x2)
+    decoder_1 = m.decoder1(decoder_2, x1)
+    return decoder_1
+end
+
+struct UNet{I,E,D,H}
+    input::I
+    encoder::E
+    decoder::D
+    head::H
+end
+
+Flux.@layer UNet
+
+function UNet(input::I, encoder::E; nclasses=1, batch_norm=true) where {I,E}
+    decoder_filters = [64, 128, 256, 512]
+    encoder_filters = filters(E)
+    skip_channels = encoder_filters[1:end-1]
+    up_channels = vcat(decoder_filters[2:end], [encoder_filters[end]])
+    return UNet(
+        input, 
+        encoder, 
+        Decoder(up_channels, skip_channels, decoder_filters; batch_norm=batch_norm), 
+        Flux.Conv((1,1), decoder_filters[1]=>nclasses)
+    )
+end
+
+function (m::UNet)(x)
+    s1, s2, s3, s4, s5 = m.input(x) |> m.encoder
+    features = m.decoder(s1, s2, s3, s4, s5)
+    out = m.head(features)
+    return out
+end
+
+"""
 function unet(in_features, n_classes; batch_norm=false)
     return UNet(
         UNetEncoder(in_features, 64, batch_norm, downsample=false),  # Encoder 1
@@ -134,3 +167,32 @@ function (m::UNet)(x::AbstractDimArray)
     newdims = (dims(x, X), dims(x, Y), Band(1:size(prediction,3)))
     return raster(prediction, WHCN, newdims)
 end
+
+function UNetEncoder(in_features::Int, out_features::Int, batch_norm; downsample=true)
+    if downsample
+        Flux.Chain(
+            Flux.MaxPool((2,2)), 
+            ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+        )
+    else
+        ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+    end
+
+end
+
+function UNetDecoder(in_features::Int, out_features::Int, batch_norm)
+    ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+end
+
+function UNetBackbone(in_features::Int, out_features::Int, batch_norm)
+    Flux.Chain(
+        Flux.MaxPool((2,2)), 
+        ConvBlock((3,3), in_features, out_features, Flux.relu, batch_norm=batch_norm)
+    )
+end
+
+function UNetUp(in_features::Int, out_features::Int)
+    Flux.ConvTranspose((2,2), in_features=>out_features, stride=2)
+end
+
+"""
