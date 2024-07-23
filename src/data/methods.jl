@@ -1,6 +1,6 @@
 function resample(x::HasDims, scale, method=:bilinear)
     _check_resample_method(method)
-    newsize = (size(x,X), size(x,Y)) .* scale
+    newsize = round.(Int, (size(x,X), size(x,Y)) .* scale)
     return Rasters.resample(x, size=newsize, method=method)
 end
 
