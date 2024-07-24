@@ -24,13 +24,13 @@ include("data/normalize.jl")
 include("data/transforms.jl")
 
 # Models
-include("models/common.jl")
-include("models/chain.jl")
-include("models/resnet.jl")
+include("models/layers.jl")
+include("models/encoders.jl")
+include("models/classifiers.jl")
 include("models/unet.jl")
+include("models/deeplab.jl")
 include("models/ssc_cnn.jl")
 include("models/r2unet.jl")
-include("models/deeplab.jl")
 
 # Losses
 include("losses.jl")
@@ -41,7 +41,7 @@ include("metrics/classification.jl")
 include("metrics/regression.jl")
 
 # Utils
-export catlayers, add_dim, folddims, foldlayers, apply, ones_like, zeros_like
+export catlayers, putdim, folddims, foldlayers, putobs, dropobs, vec2array, ones_like, zeros_like
 
 # Data
 
@@ -55,7 +55,7 @@ export TileSource, TileSampler, TileSeq
 
 # Views
 export MappedView, JoinedView, ObsView
-export splitobs, zipobs, repeatobs, keepobs, dropobs, filterobs
+export splitobs, zipobs, repeatobs, takeobs, dropobs, filterobs, mapobs, sampleobs, shuffleobs
 
 # Losses
 export binarycrossentropy, mae, mse
@@ -64,7 +64,13 @@ export binarycrossentropy, mae, mse
 export AbstractMetric, ClassificationMetric, Metric, MIoU, Accuracy, Loss
 export name, init, update, update!, compute, evaluate
 
+# Layers
+export SeparableConv, ConvBlock, Conv
+
+# Encoders
+export AbstractEncoder, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, StandardEncoder
+
 # Models
-export UNet, R2UNet, DeeplabV3, ResNet, SSC_CNN, Chain
+export Classifier, UNet, R2UNet, DeeplabV3, SSC_CNN
 
 end

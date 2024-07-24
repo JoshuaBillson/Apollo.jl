@@ -47,7 +47,7 @@ function tensor(::Type{T}, x::AbstractDimStack; precision=:f32) where {T <: TSha
 end
 function tensor(::Type{T}, x::AbstractDimArray; precision=:f32) where {T <: TShape}
     if !hasdim(x, Band)
-        return tensor(T, add_dim(x, Band); precision=precision)
+        return tensor(T, putdim(x, Band); precision=precision)
     end
     rdims = _rdims(T)
     _dims_match(x, rdims)

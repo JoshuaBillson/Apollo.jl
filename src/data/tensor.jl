@@ -13,7 +13,7 @@ tensor(T::Type{<:AbstractFloat}, x::AbstractRasterStack; layerdim=Band) = tensor
 # AbstractRaster
 function tensor(T::Type{<:AbstractFloat}, x::AbstractRaster; kwargs...)
     if !hasdim(x, Band)
-        return tensor(T, add_dim(x, Band); precision=precision)
+        return tensor(T, putdim(x, Band); precision=precision)
     end
     _dims = Rasters.commondims((X,Y,Z,Band,Ti), Rasters.dims(x))
     return tensor(T, _permute(x, _dims).data)

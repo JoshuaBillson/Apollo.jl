@@ -20,4 +20,16 @@ using Rasters
     @test_throws DimensionMismatch tensor(t1, t2, x)  # Missing Dimension
     @test_throws DimensionMismatch tensor(x, y, b)  # Mismatched Sizes
     @test_throws DimensionMismatch tensor(x, y, z)  # Mismatched Sizes
+
+    # Test Utilities
+    x = Raster(rand(Float32, 128, 128), (X,Y))
+    @test size(putdim(x, Band)) == (128,128,1)
+    @test hasdim(putdim(x, Band), Band)
+    @test size(putdim(x, Ti)) == (128,128,1)
+    @test hasdim(putdim(x, Ti), Ti)
+    @test putdim(x, X) == x
+    @test size(putdim(x, (Z, Band, Ti, X, Y))) == (128,128,1,1,1)
+    @test hasdim(putdim(x, (Z, Band, Ti, X, Y)), Z)
+    @test hasdim(putdim(x, (Z, Band, Ti, X, Y)), Band)
+    @test hasdim(putdim(x, (Z, Band, Ti, X, Y)), Ti)
 end

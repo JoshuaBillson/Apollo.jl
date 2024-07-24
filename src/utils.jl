@@ -34,13 +34,19 @@ function folddims(f, x::AbstractRaster; dims=Band)
     map(f ∘ skipmissing, eachslice(x, dims=dims)).data
 end
 
-add_dim(raster, dims::Tuple) = reduce((acc, x) -> add_dim(acc, x), dims, init=raster)
-function add_dim(x, ::Type{T}) where {T <: Rasters.DD.Dimension}
-    if !hasdim(x, T)
-        newdims = (dims(x)..., T(Base.OneTo(1))::T{Base.OneTo{Int64}})
-        return Raster(reshape(x.data, (size(x)..., 1)), newdims)
+"""
+    putdim(raster::AbstractRaster, dims::Tuple)
+    putdim(x::AbstractRaster, ::Type{Rasters.DD.Dimension})
+
+Add the provided singleton dim(s) to the given raster. Does nothing if `dim` is already present.
+"""
+putdim(raster::AbstractRaster, dims::Tuple) = reduce((acc, x) -> putdim(acc, x), dims, init=raster)
+function putdim(raster::AbstractRaster, ::Type{T}) where {T <: Rasters.DD.Dimension}
+    if !hasdim(raster, T)
+        newdims = (dims(raster)..., T(Base.OneTo(1))::T{Base.OneTo{Int64}})
+        return Raster(reshape(raster.data, (size(raster)..., 1)), newdims)
     end
-    return x
+    return raster
 end
 
 ones_like(x::AbstractArray{T}) where {T} = ones(T, size(x))
@@ -53,6 +59,23 @@ function dropobs(x::AbstractArray{<:Any,N}) where {N}
     @assert size(x,N) == 1 "Cannot drop dimension with multiple observations!"
     dropdims(x, dims=N)
 end
+
+"""
+    vec2array(x::AbstractVector, to::AbstractArray, dim::Int)
+
+Reshape the vector `x` to have the same number of dimensions as `to`. Missing dimensions 
+are added as singletons while the dimension corresponding to `dim` will be filled with the
+values of `x`.
+"""
+function vec2array(x::AbstractVector, to::AbstractArray{T,N}, dim::Int) where {T,N}
+    @assert 0 < dim <= N
+    @assert size(to, dim) == length(x)
+    newshape = Tuple([i == dim ? length(x) : 1 for i in 1:N])
+    return reshape(x, newshape)
+end
+
+todevice(x::AbstractRaster) = Rasters.modify(Flux.gpu, x)
+todevice(x::AbstractArray) = Flux.gpu(x)
 
 linear_stretch(x::AbstractArray{<:Real,4}, lb, ub) = linear_stretch(dropobs(x), lb, ub)
 function linear_stretch(x::AbstractArray{<:Real,3}, lb::Vector{<:Real}, ub::Vector{<:Real})

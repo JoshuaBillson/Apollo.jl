@@ -50,30 +50,29 @@ end
 
 Flux.@layer DeeplabV3
 
-function DeeplabV3(in_features, nclasses; depth=50, pretrain=false)
-    backbone = ResNet(depth, pretrain=pretrain, channels=in_features)
+function DeeplabV3(encoder::E; channels=3, nclasses=1) where {E <: AbstractEncoder}
+    input = ConvBlock((3,3), channels, first(filters(encoder)), Flux.relu, batch_norm=true)
     return DeeplabV3(
-        backbone.input,
-        backbone.backbone[1:3],
-        ASPP(1024), 
-        Conv((1,1), 256, 48, Flux.relu, batch_norm=true),
-        Conv((3,3), 304, 256, Flux.relu, batch_norm=true),
+        input,
+        encoder,
+        ASPP(filters(encoder)[4]), 
+        Conv((1,1), filters(encoder)[2], 48, Flux.relu, batch_norm=true),
+        Conv((3,3), 256+48, 256, Flux.relu, batch_norm=true),
         Conv((3,3), 256, 256, Flux.relu, batch_norm=true),
         Flux.Conv((1,1), 256=>nclasses),
     )
 end
 
 function (m::DeeplabV3)(x)
-    # Backbone Forward
-    input_out = m.input(x)
-    backbone_out = Flux.activations(m.backbone, input_out)
+    # Encoder Forward
+    encoder_out = m.input(x) |> m.backbone
 
     # ASPP Out
-    aspp_out = last(backbone_out) |> m.aspp
+    aspp_out = encoder_out[4] |> m.aspp
 
     # Encoder Out
     input_a = Flux.upsample_bilinear(aspp_out, 4)
-    input_b = first(backbone_out) |> m.decoder1
+    input_b = encoder_out[2] |> m.decoder1
     concat = cat(input_a, input_b, dims=3)
 
     # Decoder Out
