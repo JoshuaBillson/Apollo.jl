@@ -1,12 +1,37 @@
-function binarycrossentropy(ŷ, y, w=ones_like(y))
+abstract type AbstractLoss end
+
+struct BinaryCrossEntropy <: AbstractLoss end
+
+function (l::BinaryCrossEntropy)(ŷ, y; weights=ones_like(y), mask=ones_like(y))
     l = Flux.binarycrossentropy(ŷ, y, agg=identity)
-    return mean(l .* w)
+    total = l .* weights .* mask
+    return total / sum(mask)
 end
 
-function mae(ŷ, y, w=ones_like(y))
-    return mean(abs.(ŷ .- y) .* w)
+struct MeanAbsoluteError <: AbstractLoss end
+
+function (l::MeanAbsoluteError)(ŷ, y; weights=ones_like(y), mask=ones_like(y))
+    total = abs.(ŷ .- y) .* weights .* mask
+    return total / sum(mask)
 end
 
-function mse(ŷ, y, w=ones_like(y))
-    return mean(((ŷ .- y) .^ 2) .* w)
+struct MeanSquaredError <: AbstractLoss end
+
+function (l::MeanSquaredError)(ŷ, y; weights=ones_like(y), mask=ones_like(y))
+    total = ((ŷ .- y) .^ 2) .* weights .* mask
+    return total / sum(mask)
 end
+
+struct DiceLoss <: AbstractLoss end
+
+function (l::DiceLoss)(ŷ, y)
+    Flux.dice_coeff_loss(ŷ, y)
+end
+
+struct MixedLoss{L1<:AbstractLoss,L2<:AbstractLoss,T<:AbstractFloat} <: AbstractLoss
+    l1::L1
+    l2::L2
+    w::T
+end
+
+(l::MixedLoss)(ŷ, y) = (l.w * l.l1(ŷ, y)) + ((1 - l.w) * l.l2(ŷ, y))
