@@ -8,13 +8,7 @@ is_tile_source(::Any) = false
 is_tile_source(x::AbstractIterator) = is_tile_source(data(x))
 is_tile_source(x::AbstractIterator{<:Tuple}) = all(map(is_tile_source, data(x)))
 
-function Base.getindex(x::AbstractIterator, i::AbstractVector)
-    dst = [Ref{Any}() for _ in i]
-    Threads.@threads for j in eachindex(dst)
-        dst[j][] = getindex(x, i[j])
-    end
-    return map(x -> x[], dst) |> _stack
-end
+Base.getindex(x::AbstractIterator, i::AbstractVector) = map(j -> getindex(x, j), i) |> _stack
 
 Base.iterate(x::AbstractIterator, state=1) = state > length(x) ? nothing : (x[state], state+1)
 

@@ -32,4 +32,15 @@ using Rasters
     @test hasdim(putdim(x, (Z, Band, Ti, X, Y)), Z)
     @test hasdim(putdim(x, (Z, Band, Ti, X, Y)), Band)
     @test hasdim(putdim(x, (Z, Band, Ti, X, Y)), Ti)
+
+    # Test Views
+    x1 = collect(1:10)
+    x2 = collect(21:30)
+    v1 = ObsView(1:10, 1:10)
+    v2 = ObsView(21:30, 1:10)
+    @test all(collect(zipobs(v1, v2)) .== collect(zip(x1, x2)))  # Test zipobs
+    @test all(repeatobs(v1, 5) .== reduce(vcat, [x1 for _ in 1:5]))  # Test repeatobs
+    @test all(repeatobs(zipobs(v1, v2), 2) .== reduce(vcat, [collect(zip(x1, x2)) for _ in 1:2]))  # zipobs + repeatobs
+    @test all(takeobs(v1, [2, 5, 8, 9]) .== x1[[2, 5, 8, 9]])  # takeobs
+    @test all(dropobs(v1, [1,2,3,5,6,8,9,10]) .== x1[[4,7]])  # dropobs
 end
