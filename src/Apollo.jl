@@ -14,6 +14,9 @@ include("utils.jl")
 include("data/common.jl")
 include("data/samplers.jl")
 
+# Data Sets
+include("data/datasets.jl")
+
 # Views
 include("data/views.jl")
 
@@ -31,6 +34,7 @@ include("models/unet.jl")
 include("models/deeplab.jl")
 include("models/ssc_cnn.jl")
 include("models/r2unet.jl")
+include("models/models.jl")
 
 # Losses
 include("losses.jl")

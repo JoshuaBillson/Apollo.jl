@@ -68,6 +68,7 @@ Base.show(io::IO, x::Metric) = print(io, "$(name(x)): $(round(compute(x), digits
 
 """
     evaluate(model, data, measures...)
+    evaluate(model::BinarySegmentationModel, data, measures...)
 
 Evaluate the model's performance on the provided data.
 
@@ -96,4 +97,13 @@ function evaluate(model, data, measures::Vararg{AbstractMetric})
     vals = map(compute, metrics)
     names = map(Symbol ∘ name, metrics)
     return NamedTuple{names}(vals)
+end
+
+evaluate(model::BinarySegmentationModel, data) = evaluate(model, data, Accuracy(), MIoU(2))
+function evaluate(model::BinarySegmentationModel, data, metrics::Vararg{AbstractMetric})
+    evaluate(data, metrics...) do batch
+        x = batch[1:end-1]
+        y = batch[end]
+        return map(Flux.cpu, (model(x...), y))
+    end
 end
