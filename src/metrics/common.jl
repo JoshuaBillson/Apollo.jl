@@ -9,7 +9,7 @@ abstract type AbstractMetric end
 
 Human readable name of the given performance measure.
 """
-function name end
+name(::M) where {M <: AbstractMetric} = name(M)
 
 """
     init(m::AbstractMetric)
@@ -28,7 +28,7 @@ function update end
 
 """
     compute(m::AbstractMetric, state)
-    compute(m::Metric, state)
+    compute(m::Metric)
 
 Compute the performance measure from the current state.
 """
@@ -52,6 +52,7 @@ end
 
 """
     update!(metric::Metric, ŷ, y)
+    update!(tracker::Tracker, ŷ, y)
 
 Update the metric state for the next batch of labels and predictions.
 """
@@ -64,11 +65,19 @@ function compute(metric::Metric)
     return compute(metric.measure, metric.state)
 end
 
+"""
+    reset!(metric::Metric)
+
+Reset the metric's state.
+"""
+function reset!(metric::Metric)
+    metric.state = init(metric.measure)
+end
+
 Base.show(io::IO, x::Metric) = print(io, "$(name(x)): $(round(compute(x), digits=4))")
 
 """
     evaluate(model, data, measures...)
-    evaluate(model::BinarySegmentationModel, data, measures...)
 
 Evaluate the model's performance on the provided data.
 

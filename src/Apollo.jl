@@ -1,8 +1,9 @@
 module Apollo
 
-import Flux, Metalhead, ImageCore, Random
+import Flux, Metalhead, ImageCore, Random, Tables, PrettyTables
 using Rasters, Match, Statistics
 using Pipe: @pipe
+using DataStructures: OrderedDict
 using Match
 
 const HasDims = Union{<:AbstractRaster,<:AbstractRasterStack}
@@ -43,6 +44,7 @@ include("losses.jl")
 include("metrics/common.jl")
 include("metrics/classification.jl")
 include("metrics/regression.jl")
+include("metrics/tracker.jl")
 
 # Utils
 export catlayers, putdim, folddims, foldlayers, putobs, dropobs, vec2array, ones_like, zeros_like
