@@ -25,17 +25,19 @@ compute(::Accuracy, state) = state.correct / max(state.total, 1)
 # MIoU
 
 struct MIoU <: ClassificationMetric
-    nclasses::Int
+    classes::Vector{Int}
 end
+
+MIoU(x::AbstractVector) = MIoU(vec(x))
 
 name(::Type{MIoU}) = "MIoU"
 
-init(x::MIoU) = (intersection=zeros(Int, x.nclasses), union=zeros(Int, x.nclasses))
+init(x::MIoU) = (intersection=zeros(Int, length(x.classes)), union=zeros(Int, length(x.classes)))
 
 function update(x::MIoU, state, ŷ::AbstractArray{Int}, y::AbstractArray{Int})
-    intersection = [sum((ŷ .== cls) .&& (y .== cls)) for cls in 1:x.nclasses]
-    union = [sum((ŷ .== cls) .|| (y .== cls)) for cls in 1:x.nclasses]
+    intersection = [sum((ŷ .== cls) .&& (y .== cls)) for cls in x.classes]
+    union = [sum((ŷ .== cls) .|| (y .== cls)) for cls in 1:x.classes]
     return (intersection = state.intersection .+ intersection, union = state.union .+ union)
 end
 
-compute(x::MIoU, state) = sum(state.intersection ./ (state.union .+ eps(Float32))) / x.nclasses
+compute(x::MIoU, state) = sum(state.intersection ./ (state.union .+ eps(Float32))) / length(x.classes)
