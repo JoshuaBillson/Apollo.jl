@@ -46,6 +46,9 @@ include("metrics/classification.jl")
 include("metrics/regression.jl")
 include("metrics/tracker.jl")
 
+# Training
+include("training.jl")
+
 # Utils
 export catlayers, putdim, folddims, foldlayers, putobs, dropobs, vec2array, ones_like, zeros_like
 
@@ -64,19 +67,27 @@ export MappedView, JoinedView, ObsView
 export splitobs, zipobs, repeatobs, takeobs, dropobs, filterobs, mapobs, sampleobs, shuffleobs
 
 # Losses
-export binarycrossentropy, mae, mse
+export AbstractLoss, BinaryCrossEntropy, MeanAbsoluteError, MeanSquaredError, DiceLoss, MixedLoss
 
 # Metrics
-export AbstractMetric, ClassificationMetric, Metric, MIoU, Accuracy, Loss
-export name, init, update, update!, compute, evaluate
+export AbstractMetric, ClassificationMetric, RegressionMetric
+export MIoU, Accuracy, Loss, MSE
+export name, init, update, update!, reset!, compute, evaluate
+
+# Tracker
+export Order, Max, Min, Tracker
+export metrics, step!, epoch!, best_epoch, current_epoch, scores, printscores
 
 # Layers
-export SeparableConv, ConvBlock, Conv
+export SeparableConv, ConvBlock, Conv, LSTM
 
 # Encoders
 export AbstractEncoder, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, StandardEncoder
 
-# Models
+# Backbones
 export Classifier, UNet, R2UNet, DeeplabV3, SSC_CNN
+
+# Model
+export BinarySegmentationModel
 
 end
