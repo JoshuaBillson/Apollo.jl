@@ -1,6 +1,6 @@
 module Apollo
 
-import Flux, Metalhead, ImageCore, Random, Tables, PrettyTables
+import Flux, Metalhead, ImageCore, Random, Tables, PrettyTables, MosaicViews
 using Rasters, Match, Statistics
 using Pipe: @pipe
 using DataStructures: OrderedDict
@@ -10,6 +10,9 @@ const HasDims = Union{<:AbstractRaster,<:AbstractRasterStack}
 
 # Utilities
 include("utils.jl")
+
+# Visualization
+include("viz.jl")
 
 # Samplers
 include("data/common.jl")
@@ -52,7 +55,8 @@ include("training.jl")
 # Utils
 export catlayers, putdim, folddims, foldlayers, putobs, dropobs, vec2array, ones_like, zeros_like
 
-# Data
+# Visualization
+export linear_stretch, rgb, binmask, mosaicview
 
 # Transforms
 export DType, Image, Mask, AbstractTransform
