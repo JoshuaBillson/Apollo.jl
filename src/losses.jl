@@ -4,21 +4,21 @@ struct BinaryCrossEntropy <: AbstractLoss end
 
 function (l::BinaryCrossEntropy)(ŷ, y; weights=ones_like(y), mask=ones_like(y))
     l = Flux.binarycrossentropy(ŷ, y, agg=identity)
-    total = l .* weights .* mask
+    total = sum(l .* weights .* mask)
     return total / sum(mask)
 end
 
 struct MeanAbsoluteError <: AbstractLoss end
 
 function (l::MeanAbsoluteError)(ŷ, y; weights=ones_like(y), mask=ones_like(y))
-    total = abs.(ŷ .- y) .* weights .* mask
+    total = sum(abs.(ŷ .- y) .* weights .* mask)
     return total / sum(mask)
 end
 
 struct MeanSquaredError <: AbstractLoss end
 
 function (l::MeanSquaredError)(ŷ, y; weights=ones_like(y), mask=ones_like(y))
-    total = ((ŷ .- y) .^ 2) .* weights .* mask
+    total = sum(((ŷ .- y) .^ 2) .* weights .* mask)
     return total / sum(mask)
 end
 

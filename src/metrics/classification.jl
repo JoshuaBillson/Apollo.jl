@@ -36,7 +36,7 @@ init(x::MIoU) = (intersection=zeros(Int, length(x.classes)), union=zeros(Int, le
 
 function update(x::MIoU, state, ŷ::AbstractArray{Int}, y::AbstractArray{Int})
     intersection = [sum((ŷ .== cls) .&& (y .== cls)) for cls in x.classes]
-    union = [sum((ŷ .== cls) .|| (y .== cls)) for cls in 1:x.classes]
+    union = [sum((ŷ .== cls) .|| (y .== cls)) for cls in x.classes]
     return (intersection = state.intersection .+ intersection, union = state.union .+ union)
 end
 
