@@ -38,9 +38,9 @@ function (m::ASPP)(x)
     return out
 end
 
-struct DeeplabV3{I,B,A,D,H}
+struct DeeplabV3{I,E,A,D,H}
     input::I
-    backbone::B
+    encoder::E
     aspp::A
     decoder1::D
     decoder2::D
@@ -63,9 +63,14 @@ function DeeplabV3(encoder::E; channels=3, nclasses=1) where {E <: AbstractEncod
     )
 end
 
+input(x::DeeplabV3) = x.input
+encoder(x::DeeplabV3) = x.encoder
+decoder(x::DeeplabV3) = (aspp=x.aspp, decoder1=x.decoder1, decoder2=x.decoder2, decoder3=x.decoder3)
+head(x::DeeplabV3) = x.head
+
 function (m::DeeplabV3)(x)
     # Encoder Forward
-    encoder_out = m.input(x) |> m.backbone
+    encoder_out = m.input(x) |> m.encoder
 
     # ASPP Out
     aspp_out = encoder_out[4] |> m.aspp

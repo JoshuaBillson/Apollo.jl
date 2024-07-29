@@ -3,6 +3,7 @@ module Apollo
 import Flux, Metalhead, ImageCore, Random, Tables, PrettyTables, MosaicViews
 using Rasters, Match, Statistics
 using Pipe: @pipe
+using Accessors: @set
 using DataStructures: OrderedDict
 using Match
 
@@ -38,10 +39,6 @@ include("models/unet.jl")
 include("models/deeplab.jl")
 include("models/ssc_cnn.jl")
 include("models/r2unet.jl")
-include("models/models.jl")
-
-# Losses
-include("losses.jl")
 
 # Metrics
 include("metrics/common.jl")
@@ -50,7 +47,9 @@ include("metrics/regression.jl")
 include("metrics/tracker.jl")
 
 # Training
-include("training.jl")
+include("training/losses.jl")
+include("training/tasks.jl")
+include("training/training.jl")
 
 # Utils
 export catlayers, putdim, folddims, foldlayers, putobs, dropobs, vec2array, ones_like, zeros_like

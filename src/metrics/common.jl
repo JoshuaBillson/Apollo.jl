@@ -107,12 +107,3 @@ function evaluate(model, data, measures::Vararg{AbstractMetric})
     names = map(Symbol ∘ name, metrics)
     return NamedTuple{names}(vals)
 end
-
-evaluate(model::BinarySegmentationModel, data) = evaluate(model, data, Accuracy(), MIoU(2))
-function evaluate(model::BinarySegmentationModel, data, metrics::Vararg{AbstractMetric})
-    evaluate(data, metrics...) do batch
-        x = batch[1:end-1]
-        y = batch[end]
-        return map(Flux.cpu, (model(x...), y))
-    end
-end
