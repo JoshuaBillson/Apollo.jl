@@ -19,15 +19,11 @@ include("viz.jl")
 include("data/common.jl")
 include("data/samplers.jl")
 
-# Data Sets
-include("data/datasets.jl")
-
 # Views
 include("data/views.jl")
 
 # Transforms
 include("data/methods.jl")
-include("data/tensor.jl")
 include("data/normalize.jl")
 include("data/transforms.jl")
 
@@ -52,7 +48,7 @@ include("training/tasks.jl")
 include("training/training.jl")
 
 # Utils
-export catlayers, putdim, folddims, foldlayers, putobs, dropobs, vec2array, ones_like, zeros_like
+export catlayers, putdim, folddims, foldlayers, putobs, dropobs, vec2array, ones_like, zeros_like, unzip, stackobs
 
 # Visualization
 export linear_stretch, rgb, binmask, mosaicview
@@ -60,7 +56,7 @@ export linear_stretch, rgb, binmask, mosaicview
 # Transforms
 export DType, Image, Mask, AbstractTransform
 export Tensor, Normalize, DeNormalize, Resample, Crop, RandomCrop, FilteredTransform, ComposedTransform
-export transform, apply, tensor, normalize, denormalize, resample, upsample, resize, crop
+export tensor, raster, transform, apply, normalize, denormalize, resample, upsample, resize, crop
 
 # Samplers
 export TileSource, TileSampler, TileSeq
@@ -90,7 +86,7 @@ export AbstractEncoder, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, Stan
 # Backbones
 export Classifier, UNet, R2UNet, DeeplabV3, SSC_CNN
 
-# Model
-export BinarySegmentationModel
+# Tasks
+export BinarySegmentation
 
 end

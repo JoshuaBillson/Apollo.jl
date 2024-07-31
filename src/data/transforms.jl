@@ -2,13 +2,8 @@ import Base.|>
 import Base.*
 
 abstract type AbstractTransform end
+
 abstract type RandomTransform <: AbstractTransform end
-
-Image() = Image(:x)
-Image(x::Symbol) = Image{x}()
-
-Mask() = Mask(:y)
-Mask(x::Symbol) = Mask{x}()
 
 """
     transform(t::AbstractTransform, dtype::DType, x)
@@ -16,7 +11,6 @@ Mask(x::Symbol) = Mask{x}()
 
 Apply the transformation `t` to the input `x` with data type `dtype`.
 """
-
 transform(t::AbstractTransform, dtype, data) = apply(t, dtype, data, rand(1:1000))
 function transform(t::AbstractTransform, dtype, data::AbstractIterator)
     return MappedView(batch -> transform(t, dtype, batch), data)

@@ -8,7 +8,7 @@ is_tile_source(::Any) = false
 is_tile_source(x::AbstractIterator) = is_tile_source(data(x))
 is_tile_source(x::AbstractIterator{<:Tuple}) = all(map(is_tile_source, data(x)))
 
-Base.getindex(x::AbstractIterator, i::AbstractVector) = map(j -> getindex(x, j), i) |> _stack
+Base.getindex(x::AbstractIterator, i::AbstractVector) = map(j -> getindex(x, j), i) |> stack
 
 Base.iterate(x::AbstractIterator, state=1) = state > length(x) ? nothing : (x[state], state+1)
 
@@ -79,8 +79,6 @@ function _check_indices(data, indices)
         !(index in eachindex(data)) && throw(ArgumentError("Index $index not found!"))
     end
 end
-
-dtype(x::ObsView{<:Tuple}) = map(dtype, data(x))
 
 Base.length(x::ObsView) = length(x.indices)
 

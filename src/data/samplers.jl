@@ -1,18 +1,25 @@
+"""
+    TileSampler(raster, tilesize::Int; stride=tilesize)
+
+An object that iterates over tiles cut from a given raster.
+
+# Parameters
+- `raster`: An `AbstractRaster` or `AbstractRasterStack` to be cut into tiles.
+- `tilesize`: The size (width and height) of the tiles.
+- `stride`: The horizontal and vertical distance between adjacent tiles.
+"""
 struct TileSampler{D<:HasDims,TS}
     data::D
     tiles::Vector{Tuple{Int,Int}}
     tilesize::Int
+end
 
-    function TileSampler(data::D, tilesize::Int; kwargs...) where {D<:HasDims}
-        return TileSampler{D,tilesize}(data, tilesize; kwargs...)
-    end
-    function TileSampler{D,TS}(data::D, tilesize::Int; stride=tilesize) where {TS,D<:HasDims}
-        width, height = map(x -> size(data, x), (X,Y))
-        xvals = 1:stride:width-TS+1
-        yvals = 1:stride:height-TS+1
-        tiles = [(x, y) for x in xvals for y in yvals]
-        return new{D,TS}(data, tiles, tilesize)
-    end
+function TileSampler(data::D, tilesize::Int; stride=tilesize) where {D<:HasDims}
+    width, height = map(x -> size(data, x), (X,Y))
+    xvals = 1:stride:width-tilesize+1
+    yvals = 1:stride:height-tilesize+1
+    tiles = [(x, y) for x in xvals for y in yvals]
+    return TileSampler{D,tilesize}(data, tiles, tilesize)
 end
 
 is_tile_source(::TileSampler) = true

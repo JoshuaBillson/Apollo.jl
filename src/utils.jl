@@ -1,17 +1,27 @@
-function catlayers(x::AbstractDimStack, ::Type{D}) where {D <: Rasters.Dimension}
+"""
+    catlayers(x::AbstractRasterStack, dim)
+
+Concatenate the layers of `x` along the dimension given by `dim`.
+"""
+function catlayers(x::AbstractRasterStack, ::Type{D}) where {D <: Rasters.Dimension}
     dim_vals = @pipe _dim_vals(x, D) |> _pretty_dim_vals(_, D)
     newdim = allunique(dim_vals) ? D(dim_vals) : D(1:length(dim_vals))
     return cat(layers(x)..., dims=newdim)
 end
 
-function foldlayers(f, xs::AbstractRasterStack)
-    map(f ∘ skipmissing, layers(xs))
+"""
+    foldlayers(f, x::AbstractRasterStack)
+
+Apply the reducer `f` to all non-missing elements in each layer of `x`.
+"""
+function foldlayers(f, x::AbstractRasterStack)
+    map(f ∘ skipmissing, layers(x))
 end
 
 """
-    folddims(f, xs::AbstractRaster; dim=Band)
+    folddims(f, xs::AbstractRaster; dims=Band)
 
-Reduce the collection of non-missing values to a singular value in each slice of `x` WRT `dims`.
+Apply the reducer function `f` to all non-missing elements in each slice of `x` WRT `dims`.
 
 # Arguments
 - `f`: A function that reduces an array of values to a singular value.
@@ -35,10 +45,35 @@ function folddims(f, x::AbstractRaster; dims=Band)
 end
 
 """
-    putdim(raster::AbstractRaster, dims::Tuple)
-    putdim(x::AbstractRaster, ::Type{Rasters.DD.Dimension})
+    putdim(raster::AbstractRaster, dims)
 
-Add the provided singleton dim(s) to the given raster. Does nothing if `dim` is already present.
+Add the provided singleton dim(s) to `raster`. Does nothing if `dims` is already present.
+
+# Example
+```julia
+julia> r = Raster(rand(512,512), (X,Y));
+
+julia> putdim(r, Band)
+╭─────────────────────────────╮
+│ 512×512×1 Raster{Float64,3} │
+├─────────────────────────────┴─────────────────────────────── dims ┐
+  ↓ X   ,
+  → Y   ,
+  ↗ Band Sampled{Int64} Base.OneTo(1) ForwardOrdered Regular Points
+├─────────────────────────────────────────────────────────── raster ┤
+  extent: Extent(X = (1, 512), Y = (1, 512), Band = (1, 1))
+
+└───────────────────────────────────────────────────────────────────┘
+[:, :, 1]
+ 0.107662  0.263251    0.786834  0.334663  …  0.316804   0.709557    0.478199
+ 0.379863  0.532268    0.635206  0.33514      0.402433   0.413602    0.657538
+ 0.129775  0.283808    0.327946  0.727027     0.685844   0.847777    0.435326
+ 0.73348   0.00705636  0.178885  0.381932     0.146575   0.310242    0.159852
+ ⋮                                         ⋱                         ⋮
+ 0.330857  0.52704     0.888379  0.811084  …  0.0660687  0.00230472  0.448761
+ 0.698654  0.510846    0.916446  0.621061     0.23648    0.510697    0.113338
+ 0.600629  0.116626    0.567983  0.174267     0.089853   0.443758    0.667935
+```
 """
 putdim(raster::AbstractRaster, dims::Tuple) = reduce((acc, x) -> putdim(acc, x), dims, init=raster)
 function putdim(raster::AbstractRaster, ::Type{T}) where {T <: Rasters.DD.Dimension}
@@ -49,12 +84,32 @@ function putdim(raster::AbstractRaster, ::Type{T}) where {T <: Rasters.DD.Dimens
     return raster
 end
 
+"""
+    ones_like(x::AbstractArray)
+
+Construct an array of ones with the same size and element type as `x`.
+"""
 ones_like(x::AbstractArray{T}) where {T} = ones(T, size(x))
 
+"""
+    zeros_like(x::AbstractArray)
+
+Construct an array of zeros with the same size and element type as `x`.
+"""
 zeros_like(x::AbstractArray{T}) where {T} = zeros(T, size(x))
 
+"""
+    putobs(x::AbstractArray)
+
+Add an N+1 obervation dimension of size 1 to the tensor `x`.
+"""
 putobs(x::AbstractArray) = reshape(x, size(x)..., 1)
 
+"""
+    dropobs(x::AbstractArray)
+
+Remove the observation dimension from the tensor `x`.
+"""
 function dropobs(x::AbstractArray{<:Any,N}) where {N}
     @assert size(x,N) == 1 "Cannot drop dimension with multiple observations!"
     dropdims(x, dims=N)
@@ -74,8 +129,70 @@ function vec2array(x::AbstractVector, to::AbstractArray{T,N}, dim::Int) where {T
     return reshape(x, newshape)
 end
 
-todevice(x::AbstractRaster) = Rasters.modify(Flux.gpu, x)
-todevice(x::AbstractArray) = Flux.gpu(x)
+"""
+    todevice(x)
+
+Copy `x` to the GPU.
+"""
+todevice(x) = Flux.gpu(x)
+todevice(x::AbstractRaster) = Rasters.modify(todevice, x)
+
+"""
+    stackobs(x...)
+    stackobs(x::AbstractVector)
+
+Stack the elements in `x` as if they were observations in a batch. If `x` is an `AbstractArray`, 
+elements will be concatenated along the Nth dimension. Other data types will simply be placed
+in a `Vector` in the same order as they were received. Special attention is paid to a `Vector` of
+`Tuples`, where each tuple represents a single observation, such as a feature/label pair. In this
+case, the tuples will first be unzipped, before their constituent elements are then stacked as usual.
+
+# Example
+```julia
+julia> stackobs(1, 2, 3, 4, 5)
+5-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> stackobs([(1, :a), (2, :b), (3, :c)])
+([1, 2, 3], [:a, :b, :c])
+
+julia> stackobs([rand(256, 256, 3, 1) for _ in 1:10]...) |> size
+(256, 256, 3, 10)
+
+julia> xs = [rand(256, 256, 3, 1) for _ in 1:10];
+
+julia> ys = [rand(256, 256, 1, 1) for _ in 1:10];
+
+julia> data = collect(zip(xs, ys));
+
+julia> stackobs(data) .|> size
+((256, 256, 3, 10), (256, 256, 1, 10))
+```
+"""
+stackobs(x::Vararg{Any}) = [x...]
+stackobs(x::Vararg{HasDims}) = [x...]
+stackobs(x::AbstractVector{<:Any}) = stackobs(x...)
+stackobs(::Vararg{AbstractArray}) = throw(DimensionMismatch("Cannot stack tensors with different dimensions!"))
+stackobs(x::Vararg{AbstractArray{T,N}}) where {T,N} = cat(x..., dims=N)
+stackobs(x::AbstractVector{<:Tuple}) = @pipe unzip(x) |> map(stackobs, _)
+
+"""
+    unzip(x::AbstractVector{<:Tuple})
+
+The reverse of `zip`.
+
+# Example
+```julia
+julia> zip([1, 2, 3], [:a, :b, :c]) |> collect |> unzip
+([1, 2, 3], [:a, :b, :c])
+```
+"""
+unzip(x::AbstractVector) = x
+unzip(x::AbstractVector{<:Tuple}) = map(f -> getfield.(x, f), fieldnames(eltype(x)))
 
 _crop(x::AbstractArray{<:Any,2}, xdims, ydims) = x[xdims,ydims]
 _crop(x::AbstractArray{<:Any,3}, xdims, ydims) = x[xdims,ydims,:]
@@ -99,17 +216,7 @@ end
 _tilesize(x::HasDims) = size.(Ref(x), (X,Y))
 _tilesize(x::AbstractArray) = size(x)[1:2]
 
-_permute(x, dims) = (Rasters.name(Rasters.dims(x)) == Rasters.name(dims)) ? x : permutedims(x, dims)
-
-_stack(x::Vararg{Any}) = [x...]
-_stack(x::Vararg{HasDims}) = [x...]
-_stack(x::Vararg{AbstractArray}) = throw(DimensionMismatch("Cannot stack tensors with different dimensions!"))
-_stack(x::Vararg{AbstractArray{T,N}}) where {T,N} = cat(x..., dims=N)
-_stack(x::AbstractVector{<:Any}) = _stack(x...)
-_stack(x::AbstractVector{<:Tuple}) = @pipe _unzip(x) |> map(_stack, _)
-
-_unzip(x::AbstractVector) = x
-_unzip(x::AbstractVector{<:Tuple}) = map(f -> getfield.(x, f), fieldnames(eltype(x)))
+_permute(x::AbstractRaster, dims) = (Rasters.name(Rasters.dims(x)) == Rasters.name(dims)) ? x : permutedims(x, dims)
 
 _precision(::Type{T}, x::AbstractArray{T}) where {T} = x 
 _precision(::Type{T}, x::AbstractArray) where {T} = T.(x)
