@@ -26,24 +26,40 @@ function stats(xs)
     return μ, sqrt.(σ)
 end
 
-function normalize(x::AbstractArray{<:T,N}, μ::AbstractVector, σ::AbstractVector; dim=3) where {T <: AbstractFloat, N}
-    shape = Tuple(ifelse(i == dim, :, 1) for i in 1:N)
-    μ = T.(reshape(μ, shape))
-    σ = T.(reshape(σ, shape))
+"""
+    normalize(x::AbstractArray, μ::AbstractVector, σ::AbstractVector; dim=3)
+
+Normalize the input array with respect to the specified dimension so that the mean is 0
+and the standard deviation is 1.
+
+# Parameters
+- `μ`: A `Vector` of means for each index in `dim`.
+- `σ`: A `Vector` of standard deviations for each index in `dim`.
+- `dim`: The dimension along which to normalize the input array.
+"""
+normalize(x::AbstractRaster, μ, σ; dim=3) = Rasters.modify(x -> normalize(x, μ, σ; dim=dim), x)
+function normalize(x::AbstractArray, μ::AbstractVector, σ::AbstractVector; dim=3)
+    μ = vec2array(μ, x, dim)
+    σ = vec2array(σ, x, dim)
     return (x .- μ) ./ σ
 end
-function normalize(x::AbstractRaster, μ::AbstractVector, σ::AbstractVector; dim=dimnum(x, Band))
-    return Rasters.modify(x -> normalize(x, μ, σ, dim=dim), x)
-end
 
-function denormalize(x::AbstractArray{<:T,N}, μ::AbstractVector, σ::AbstractVector; dim=3) where {T <: AbstractFloat, N}
-    shape = Tuple(ifelse(i == dim, :, 1) for i in 1:N)
-    μ = T.(reshape(μ, shape))
-    σ = T.(reshape(σ, shape))
+"""
+    denormalize(x::AbstractArray, μ::AbstractVector, σ::AbstractVector; dim=3)
+
+Denormalize the input array with respect to the specified dimension. Reverses the
+effect of `normalize`.
+
+# Parameters
+- `μ`: A `Vector` of means for each index in `dim`.
+- `σ`: A `Vector` of standard deviations for each index in `dim`.
+- `dim`: The dimension along which to denormalize the input array.
+"""
+denormalize(x::AbstractRaster, μ, σ; dim=3) = Rasters.modify(x -> denormalize(x, μ, σ, dim=dim), x)
+function denormalize(x::AbstractArray, μ::AbstractVector, σ::AbstractVector; dim=3)
+    μ = vec2array(μ, x, dim)
+    σ = vec2array(σ, x, dim)
     return (x .* σ) .+ μ
-end
-function denormalize(x::AbstractRaster, μ::AbstractVector, σ::AbstractVector; dim=dimnum(x, Band))
-    return Rasters.modify(x -> denormalize(x, μ, σ, dim=dim), x)
 end
 
 _extract_bands(x::AbstractArray{<:Real}) =  _extract_bands(Float64.(x))

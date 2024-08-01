@@ -1,25 +1,33 @@
 # Interface
 
-abstract type AbstractIterator{D} end
+"""
+Super type of all iterators.
+"""
+abstract type AbstractView{D} end
 
-data(x::AbstractIterator) = x.data
+data(x::AbstractView) = x.data
 
 is_tile_source(::Any) = false
-is_tile_source(x::AbstractIterator) = is_tile_source(data(x))
-is_tile_source(x::AbstractIterator{<:Tuple}) = all(map(is_tile_source, data(x)))
+is_tile_source(x::AbstractView) = is_tile_source(data(x))
+is_tile_source(x::AbstractView{<:Tuple}) = all(map(is_tile_source, data(x)))
 
-Base.getindex(x::AbstractIterator, i::AbstractVector) = map(j -> getindex(x, j), i) |> stack
+Base.getindex(x::AbstractView, i::AbstractVector) = map(j -> getindex(x, j), i) |> stack
 
-Base.iterate(x::AbstractIterator, state=1) = state > length(x) ? nothing : (x[state], state+1)
+Base.iterate(x::AbstractView, state=1) = state > length(x) ? nothing : (x[state], state+1)
 
-Base.firstindex(x::AbstractIterator) = 1
-Base.lastindex(x::AbstractIterator) = length(x)
+Base.firstindex(x::AbstractView) = 1
+Base.lastindex(x::AbstractView) = length(x)
 
-Base.keys(x::AbstractIterator) = Base.OneTo(length(x))
+Base.keys(x::AbstractView) = Base.OneTo(length(x))
 
 # MappedView
 
-struct MappedView{F<:Function,D} <: AbstractIterator{D}
+"""
+    MappedView(f, data)
+
+An iterator which lazily applies `f` to each element in `data` when requested.
+"""
+struct MappedView{F<:Function,D} <: AbstractView{D}
     f::F
     data::D
 end
@@ -32,7 +40,13 @@ Base.getindex(x::MappedView, i::Int) = x.f(x.data[i])
 
 # JoinedView
 
-struct JoinedView{D} <: AbstractIterator{D}
+"""
+    JoinedView(data...)
+
+An object that iterates over each element in the iterators given by `data` as
+if they were concatenated into a single list.
+"""
+struct JoinedView{D} <: AbstractView{D}
     data::D
     JoinedView(data) = JoinedView((data,))
     JoinedView(data...) = JoinedView(data)
@@ -57,9 +71,9 @@ end
 """
     ObsView(data, indices)
 
-Construct an iterator over `data`
+Construct an iterator over the elements specified by `indices` in `data`.
 """
-struct ObsView{D} <: AbstractIterator{D}
+struct ObsView{D} <: AbstractView{D}
     data::D
     indices::Vector{Int}
 
