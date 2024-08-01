@@ -106,11 +106,11 @@ Add an N+1 obervation dimension of size 1 to the tensor `x`.
 putobs(x::AbstractArray) = reshape(x, size(x)..., 1)
 
 """
-    dropobs(x::AbstractArray)
+    rmobs(x::AbstractArray)
 
 Remove the observation dimension from the tensor `x`.
 """
-function dropobs(x::AbstractArray{<:Any,N}) where {N}
+function rmobs(x::AbstractArray{<:Any,N}) where {N}
     @assert size(x,N) == 1 "Cannot drop dimension with multiple observations!"
     dropdims(x, dims=N)
 end
@@ -122,7 +122,8 @@ Reshape the vector `x` to have the same number of dimensions as `to`. Missing di
 are added as singletons while the dimension corresponding to `dim` will be filled with the
 values of `x`.
 """
-function vec2array(x::AbstractVector, to::AbstractArray{T,N}, dim::Int) where {T,N}
+vec2array(x::AbstractVector, to::AbstractArray{T}, dim::Int) where T = vec2array(T.(x), to, dim)
+function vec2array(x::AbstractVector{T}, to::AbstractArray{T,N}, dim::Int) where {T,N}
     @assert 0 < dim <= N
     @assert size(to, dim) == length(x)
     newshape = Tuple([i == dim ? length(x) : 1 for i in 1:N])

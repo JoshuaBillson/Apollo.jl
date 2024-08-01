@@ -1,3 +1,8 @@
+"""
+    Classifier(encoder::AbstractEncoder; channels=3, nclasses=1, batch_norm=true)
+
+Construct an image classifier from the provided encoder.
+"""
 struct Classifier{I,E,H}
     input::I
     encoder::E
