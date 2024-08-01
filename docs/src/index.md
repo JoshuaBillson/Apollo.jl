@@ -8,22 +8,72 @@ Documentation for [Apollo](https://github.com/JoshuaBillson/Apollo.jl).
 
 # Utility Methods
 
-```@autodocs
-Modules = [Apollo]
-Pages = ["src/utils.jl", "src/viz.jl"]
+```@docs
+binmask
+catlayers
+folddims
+foldlayers
+linear_stretch
+mosaicview
+ones_like
+putdim
+putobs
+rgb
+rmobs
+stackobs
+todevice
+unzip
+vec2array
+zeros_like
 ```
 
-# Data
+# Data Views
+```@docs
+AbstractView
+JoinedView
+MappedView
+ObsView
+TileSampler
+TileSeq
 
-```@autodocs
-Modules = [Apollo]
-Pages = [
-    "src/data/common.jl", 
-    "src/data/views.jl", 
-    "src/data/samplers.jl", 
-    "src/data/methods.jl", 
-    "src/data/transforms.jl"
-]
+dropobs
+filterobs
+mapobs
+repeatobs
+sampleobs
+shuffleobs
+splitobs
+takeobs
+zipobs
+```
+
+# Transforms
+```@docs
+DType
+Image
+Mask
+
+AbstractTransform
+RandomTransform
+ComposedTransform
+Crop
+DeNormalize
+FilteredTransform
+Normalize
+RandomCrop
+Resample
+Tensor
+
+apply
+crop
+denormalize
+normalize
+raster
+resample
+resize
+tensor
+transform
+upsample
 ```
 
 # Metrics
@@ -38,17 +88,32 @@ Pages = [
 ]
 ```
 
+# Layers
+
+```@docs
+ConvBlock
+LSTM
+SeparableConv
+```
+
+# Encoders
+
+```@docs
+AbstractEncoder
+ResNet18
+ResNet34
+ResNet50
+ResNet101
+ResNet152
+StandardEncoder
+```
+
 # Models
 
-```@autodocs
-Modules = [Apollo]
-Pages = [
-    "src/models/layers.jl", 
-    "src/models/encoders.jl", 
-    "src/models/classifiers.jl", 
-    "src/models/deeplab.jl", 
-    "src/models/unet.jl", 
-    "src/models/r2unet.jl", 
-    "src/models/ssc_cnn.jl", 
-]
+```@docs
+Classifier
+DeeplabV3
+R2UNet
+SSC_CNN
+UNet
 ```

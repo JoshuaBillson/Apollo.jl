@@ -38,6 +38,11 @@ function (m::ASPP)(x)
     return out
 end
 
+"""
+    DeeplabV3(encoder::AbstractEncoder; channels=3, nclasses=1)
+
+Construct a DeeplabV3+ model.
+"""
 struct DeeplabV3{I,E,A,D,H}
     input::I
     encoder::E
