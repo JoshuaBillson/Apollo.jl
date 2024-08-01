@@ -1,3 +1,14 @@
+"""
+    SeparableConv(filter, in, out, σ=Flux.relu)
+
+A separable convolutional layer consists of a depthwise convolution followed by a 1x1 convolution.
+
+# Parameters
+- `filter`: The size of the filter as a tuple.
+- `in`: The number of input features.
+- `out`: The number of output features.
+- `σ`: The activation function to apply following the 1x1 convolution.
+"""
 function SeparableConv(filter, in, out, σ=Flux.relu)
     Flux.Chain(
         Flux.DepthwiseConv(filter, in=>in, pad=Flux.SamePad()), 
@@ -5,6 +16,19 @@ function SeparableConv(filter, in, out, σ=Flux.relu)
     )
 end
 
+"""
+    ConvBlock(filter, in, out, σ; depth=2, batch_norm=true)
+
+A block of convolutional layers with optional batch normalization.
+
+# Parameters
+- `filter`: The size of the filter to use for each layer.
+- `in`: The number of input features.
+- `out`: The number of output features.
+- `σ`: The activation function to apply after each convolution.
+- `depth`: The number of successive convolutions in the block.
+- `batch_norm`: Applies batch normalization after each convolution if `true`.
+"""
 function ConvBlock(filter, in, out, σ; depth=2, batch_norm=true)
     return Flux.Chain(
         [ifelse(
@@ -27,6 +51,28 @@ function Conv(filter, in, out, σ; batch_norm=true)
     end
 end
 
+"""
+    LSTM(in => out)
+
+A stateless pixel-wise LSTM layer that expects an input tensor with shape WHCLN, where
+W is image width, H is image height, C is image channels, L is sequence length, and N is 
+batch size. The LSTM module will be applied to each pixel in the sequence from first to last 
+with all but the final output discarded.
+
+# Parameters
+- `in`: The number of input features.
+- `out`: The number of output features.
+
+# Example
+```jldoctest
+julia> m = Apollo.LSTM(2=>32);
+
+julia> x = rand(Float32, 64, 64, 2, 9, 4);
+
+julia> m(x) |> size
+(64, 64, 32, 4)
+```
+"""
 struct LSTM{T}
     lstm::T
 end
