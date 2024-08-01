@@ -40,6 +40,11 @@ function Base.show(io::IO, x::TileSampler{D,TS}) where {D, TS}
     printstyled(io, "TileSampler(tile_size=$TS, num_tiles=$(length(x)))")
 end
 
+"""
+    TileSeq(tiles)
+
+An object that iterates over a `Vector` of tiles.
+"""
 struct TileSeq{D} <: TileSource
     tiles::D
 end
