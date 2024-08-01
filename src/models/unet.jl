@@ -1,12 +1,3 @@
-struct UNet{I,E,D,H}
-    input::I
-    encoder::E
-    decoder::D
-    head::H
-end
-
-Flux.@layer UNet
-
 """
     UNet(;encoder=StandardEncoder(batch_norm=true), input=nothing, channels=3, nclasses=1, batch_norm=true)
 
@@ -19,6 +10,15 @@ Construct a UNet model.
 - `nclasses`: The number of output channels produced by the head.
 - `batch_norm`: Use batch normalization after each convolutional layer (default=true).
 """
+struct UNet{I,E,D,H}
+    input::I
+    encoder::E
+    decoder::D
+    head::H
+end
+
+Flux.@layer UNet
+
 function UNet(;encoder=StandardEncoder(batch_norm=true), input=nothing, channels=3, nclasses=1, batch_norm=true)
     input = isnothing(input) ? ConvBlock((3,3), channels, first(filters(encoder)), Flux.relu, batch_norm=batch_norm) : input
     UNet(
@@ -36,11 +36,6 @@ function UNet(input::I, encoder::E; nclasses=1, batch_norm=true) where {I,E}
         Flux.Conv((1,1), 64=>nclasses)
     )
 end
-
-input(x::UNet) = x.input
-encoder(x::UNet) = x.encoder
-decoder(x::UNet) = x.decoder
-head(x::UNet) = x.head
 
 function (m::UNet)(x)
     return @pipe m.input(x) |> m.encoder |> reverse |> m.decoder |> last |> m.head

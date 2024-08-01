@@ -1,11 +1,9 @@
-function SSC_Conv(in_filters, out_filters)
-	return Flux.Conv((3, 3), in_filters=>out_filters, Flux.leakyrelu, pad=Flux.SamePad())
-end
+"""
+    SSC_CNN()
 
-function SSC_BottleNeck()
-	return Flux.Chain( SSC_Conv(128, 128), SSC_Conv(128, 128) )
-end
-
+Construct an SSC_CNN model ([Nguyen et al.](https://doi.org/10.1109/IGARSS39084.2020.9323614)) 
+to sharpen the 20m Sentinel-2 bands to a resolution of 10m.
+"""
 struct SSC_CNN
     enc1
     enc2
@@ -29,7 +27,7 @@ function SSC_CNN()
         Flux.Conv((3,3), 128=>6, pad=Flux.SamePad()))                # Head
 end
 
-Flux.@functor(SSC_CNN)
+Flux.@layer SSC_CNN
 
 function (m::SSC_CNN)(lr::AbstractArray{Float32,4}, hr::AbstractArray{Float32,4})
     # Upsample LR Bands
@@ -59,8 +57,10 @@ function (m::SSC_CNN)(lr::AbstractArray{Float32,4}, hr::AbstractArray{Float32,4}
     return residual .+ lr
 end
 
-function (m::SSC_CNN)(lr::AbstractDimArray, hr::AbstractDimArray)
-    prediction = m(tensor(WHCN, lr), tensor(WHCN, hr))
-    new_dims = (Rasters.dims(hr, X), Rasters.dims(hr, Y), Rasters.dims(lr, Band))
-    return raster(prediction, WHCN, new_dims)
+function SSC_Conv(in_filters, out_filters)
+	return Flux.Conv((3, 3), in_filters=>out_filters, Flux.leakyrelu, pad=Flux.SamePad())
+end
+
+function SSC_BottleNeck()
+	return Flux.Chain( SSC_Conv(128, 128), SSC_Conv(128, 128) )
 end
