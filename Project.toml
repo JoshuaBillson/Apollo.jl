@@ -27,6 +27,7 @@ Match = "2"
 Pipe = "1"
 Rasters = "0.11"
 Statistics = "1"
+Tables = "1"
 julia = "1.9"
 
 [extras]
