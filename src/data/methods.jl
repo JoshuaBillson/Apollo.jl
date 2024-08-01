@@ -39,12 +39,33 @@ function raster(tensor::AbstractArray{T,N}, dims::Tuple; missingval=0) where {T,
     return Raster(selectdim(tensor, N, 1), dims, missingval=T(missingval))
 end
 
+"""
+    resample(x::AbstractRaster, scale::AbstractFloat, method=:bilinear)
+    resample(x::AbstractRasterStack, scale::AbstractFloat, method=:bilinear)
+
+Resample `x` according to the given `scale` and `method`.
+
+# Parameters
+- `x`: The raster/stack to be resampled.
+- `scale`: The size of the output with respect to the input.
+- `method`: One of `:near`, `:bilinear`, `:cubic`, `:cubicspline`, `:lanczos`, or `:average`.
+"""
 function resample(x::HasDims, scale, method=:bilinear)
     _check_resample_method(method)
     newsize = round.(Int, (size(x,X), size(x,Y)) .* scale)
     return Rasters.resample(x, size=newsize, method=method)
 end
 
+"""
+    upsample(x::AbstractArray, scale, method=:bilinear)
+
+Upsample the array `x` according to the given `scale` and `method`.
+
+# Parameters
+- `x`: The array to be upsampled.
+- `scale`: The size of the output with respect to the input.
+- `method`: One of `:linear`, `:bilinear`, `:trilinear`, or `:nearest`.
+"""
 function upsample(x::AbstractArray, scale, method=:bilinear)
     @match method begin
         :linear => Flux.upsample_linear(x, scale)
@@ -55,6 +76,17 @@ function upsample(x::AbstractArray, scale, method=:bilinear)
     end
 end
 
+"""
+    resize(x::AbstractRaster, newsize, method=:bilinear)
+    resize(x::AbstractRasterStack, newsize, method=:bilinear)
+
+Resize the raster/stack `x` to `newsize` under the specified `method`.
+
+# Parameters
+- `x`: The array to be resized.
+- `newsize`: The width and height of the output as a tuple.
+- `method`: One of `:near`, `:bilinear`, `:cubic`, `:cubicspline`, `:lanczos`, or `:average`.
+"""
 function resize(x::HasDims, newsize, method=:bilinear)
     _check_resample_method(method)
     return Rasters.resample(x, size=newsize, method=method)

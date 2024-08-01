@@ -5,7 +5,6 @@ using Rasters, Match, Statistics
 using Pipe: @pipe
 using Accessors: @set
 using DataStructures: OrderedDict
-using Match
 
 const HasDims = Union{<:AbstractRaster,<:AbstractRasterStack}
 
@@ -48,7 +47,7 @@ include("training/tasks.jl")
 include("training/training.jl")
 
 # Utils
-export catlayers, putdim, folddims, foldlayers, putobs, dropobs, vec2array, ones_like, zeros_like, unzip, stackobs
+export catlayers, putdim, folddims, foldlayers, putobs, rmobs, vec2array, ones_like, zeros_like, unzip, stackobs, todevice
 
 # Visualization
 export linear_stretch, rgb, binmask, mosaicview
@@ -62,7 +61,7 @@ export tensor, raster, transform, apply, normalize, denormalize, resample, upsam
 export TileSource, TileSampler, TileSeq
 
 # Views
-export MappedView, JoinedView, ObsView
+export AbstractView, MappedView, JoinedView, ObsView
 export splitobs, zipobs, repeatobs, takeobs, dropobs, filterobs, mapobs, sampleobs, shuffleobs
 
 # Losses

@@ -60,6 +60,11 @@ function R2UNetUp(in_features::Int, out_features::Int)
     Flux.ConvTranspose((2,2), in_features=>out_features, stride=2)
 end
 
+"""
+    R2UNet(in_features, n_classes; t=2, batch_norm=false)
+
+Construct an R2-UNet model.
+"""
 struct R2UNet{E,D,U,B,H}
     encoder1::E
     encoder2::E
