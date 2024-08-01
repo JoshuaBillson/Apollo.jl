@@ -180,9 +180,7 @@ Modify the transform `t` so that it will only be applied to inputs whose
 type and name matches `dtype`. The `*` operator is overloaded for convenience.
 
 # Example
-```jldoctest
-julia> using Rasters, ArchGDAL;
-
+```julia
 julia> r = Raster(rand(256,256, 3), (X,Y,Band));
 
 julia> t = Image(:x2) * Resample(2.0);
@@ -218,9 +216,7 @@ end
 Apply `transforms` to the input in the same order as they are given.
 
 # Example
-```jldoctest
-julia> using Rasters, ArchGDAL;
-
+```julia
 julia> r = Raster(rand(256,256, 3), (X,Y,Band));
 
 julia> t = Resample(2.0) |> Tensor();
