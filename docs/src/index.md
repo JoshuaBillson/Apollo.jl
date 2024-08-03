@@ -78,14 +78,37 @@ upsample
 
 # Metrics
 
-```@autodocs
-Modules = [Apollo]
-Pages = [
-    "src/metrics/common.jl", 
-    "src/metrics/tracker.jl", 
-    "src/metrics/classification.jl", 
-    "src/metrics/regression.jl", 
-]
+```@docs
+AbstractMetric
+ClassificationMetric
+RegressionMetric
+Metric
+Accuracy
+MIoU
+MSE
+Loss
+compute
+evaluate
+init
+name
+reset!
+update
+update!
+```
+
+# Performance Tracking
+```@docs
+Tracker
+MetricDict
+Max
+Min
+
+best_epoch
+current_epoch
+epoch!
+printscores
+scores
+step!
 ```
 
 # Layers

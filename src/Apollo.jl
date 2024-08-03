@@ -36,7 +36,7 @@ include("models/ssc_cnn.jl")
 include("models/r2unet.jl")
 
 # Metrics
-include("metrics/common.jl")
+include("metrics/interface.jl")
 include("metrics/classification.jl")
 include("metrics/regression.jl")
 include("metrics/tracker.jl")
@@ -73,8 +73,8 @@ export MIoU, Accuracy, Loss, MSE
 export name, init, update, update!, reset!, compute, evaluate
 
 # Tracker
-export Order, Max, Min, Tracker
-export metrics, step!, epoch!, best_epoch, current_epoch, scores, printscores
+export Order, Max, Min, Tracker, MetricDict
+export step!, epoch!, best_epoch, current_epoch, scores, printscores
 
 # Layers
 export SeparableConv, ConvBlock, Conv, LSTM

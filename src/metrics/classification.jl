@@ -1,3 +1,6 @@
+"""
+Super type of all classification metrics.
+"""
 abstract type ClassificationMetric <: AbstractMetric end
 
 function update(x::ClassificationMetric, state, ŷ::AbstractArray{<:AbstractFloat,N}, y::AbstractArray{<:AbstractFloat,N}) where {N}
@@ -10,6 +13,11 @@ end
 
 # Accuracy
 
+"""
+    Accuracy()
+    
+Measures the model's overall accuracy as `correct / total`.
+"""
 struct Accuracy <: ClassificationMetric end
 
 name(::Type{Accuracy}) = "accuracy"
@@ -24,6 +32,12 @@ compute(::Accuracy, state) = state.correct / max(state.total, 1)
 
 # MIoU
 
+"""
+    MIoU(classes::Vector{Int})
+
+Mean Intersection over Union (MIoU) is a measure of the overlap between a prediction and a label.
+This measure is frequently used for segmentation models.
+"""
 struct MIoU <: ClassificationMetric
     classes::Vector{Int}
 end

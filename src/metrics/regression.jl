@@ -1,7 +1,15 @@
+"""
+Super type of all regression metrics.
+"""
 abstract type RegressionMetric <: AbstractMetric end
 
 # Loss Tracking
 
+"""
+    Loss(loss::Function)
+
+Tracks the average model loss as `total_loss / steps`
+"""
 struct Loss{L} <: RegressionMetric
     loss::L
 end
@@ -18,6 +26,11 @@ compute(::Loss, state) = state.total / max(state.n, 1)
 
 # Mean Squared Error
 
+"""
+    MSE()
+
+Tracks Mean Squared Error (MSE) as `((ŷ - y) .^ 2) / length(y)`.
+"""
 struct MSE <: RegressionMetric end
 
 name(::MSE) = "mse"

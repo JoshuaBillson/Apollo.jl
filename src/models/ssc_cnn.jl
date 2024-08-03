@@ -1,8 +1,11 @@
 """
-    SSC_CNN()
+    SSC_CNN(;width=128)
 
 Construct an SSC_CNN model ([Nguyen et al.](https://doi.org/10.1109/IGARSS39084.2020.9323614)) 
 to sharpen the 20m Sentinel-2 bands to a resolution of 10m.
+
+# Parameters
+- `width`: The number of features to use in each block (default = 128).
 """
 struct SSC_CNN
     enc1
@@ -18,13 +21,13 @@ struct SSC_CNN
     head
 end
 
-function SSC_CNN()
+function SSC_CNN(;width=128)
     return SSC_CNN(
-        SSC_Conv(10, 128), SSC_Conv(128, 128), SSC_Conv(128, 128),   # Encoder
-        SSC_Conv(192, 128), SSC_Conv(192, 128), SSC_Conv(192, 128),  # Decoder
-        SSC_Conv(128, 64), SSC_Conv(128, 64), SSC_Conv(128, 64),     # Skip
-        Flux.Chain(SSC_Conv(128, 128), SSC_Conv(128, 128)),          # Bottleneck
-        Flux.Conv((3,3), 128=>6, pad=Flux.SamePad()))                # Head
+        SSC_Conv(10, width), SSC_Conv(width, width), SSC_Conv(width, width),              # Encoder
+        SSC_Conv(64+width, width), SSC_Conv(64+width, width), SSC_Conv(64+width, width),  # Decoder
+        SSC_Conv(width, 64), SSC_Conv(width, 64), SSC_Conv(width, 64),                    # Skip
+        Flux.Chain(SSC_Conv(width, width), SSC_Conv(width, width)),                       # Bottleneck
+        Flux.Conv((3,3), width=>6, pad=Flux.SamePad()))                                   # Head
 end
 
 Flux.@layer SSC_CNN

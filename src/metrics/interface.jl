@@ -1,5 +1,28 @@
 """
-Abstract supertype of all evaluation metrics.
+Abstract supertype of all metrics.
+
+Metrics are measures of a model's performance, such as loss, accuracy, or squared error.
+
+Each metric must implement the following interface:
+- `name(::Type{metric})`: Returns the human readable name of the metric.
+- `init(metric)`: Returns the initial state of the metric as a `NamedTuple`.
+- `update(metric, state, ŷ, y)`: Returns the new state given the previous state and a batch.
+- `compute(metric, state)`: Computes the metric's value for the current state.
+
+# Example Implementation
+```julia
+struct Accuracy <: ClassificationMetric end
+
+name(::Type{Accuracy}) = "accuracy"
+
+init(::Accuracy) = (correct=0, total=0)
+
+function update(::Accuracy, state, ŷ, y)
+    return (correct = state.correct + sum(ŷ .== y), total = state.total + length(ŷ))
+end
+
+compute(::Accuracy, state) = state.correct / max(state.total, 1)
+```
 """
 abstract type AbstractMetric end
 
@@ -28,7 +51,6 @@ function update end
 
 """
     compute(m::AbstractMetric, state)
-    compute(m::Metric)
 
 Compute the performance measure from the current state.
 """
@@ -37,7 +59,7 @@ function compute end
 """
     Metric(measure::AbstractMetric)
 
-Construct a Metric object to track the state for the given `AbstractMetric`.
+`Metric` objects are used to store the state for a given `AbstractMetric`.
 """
 mutable struct Metric{M,T}
     measure::M
@@ -52,7 +74,6 @@ end
 
 """
     update!(metric::Metric, ŷ, y)
-    update!(tracker::Tracker, ŷ, y)
 
 Update the metric state for the next batch of labels and predictions.
 """
@@ -61,6 +82,11 @@ function update!(metric::Metric, ŷ, y)
     return metric
 end
 
+"""
+    compute(metric::Metric)
+
+Compute the metric value for the current state.
+"""
 function compute(metric::Metric)
     return compute(metric.measure, metric.state)
 end
