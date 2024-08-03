@@ -30,7 +30,7 @@ function UNet(;encoder=StandardEncoder(batch_norm=true), input=nothing, channels
         batch_norm
     )
 end
-function UNet(input::I, encoder::E, activation, nclasses, batch_norm) where {I,E}
+function UNet(input::I, encoder::E, activation::F, nclasses::Int, batch_norm::Bool) where {I,E,F}
     return UNet(
         input, 
         encoder, 
