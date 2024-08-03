@@ -2,20 +2,32 @@ abstract type AbstractLoss end
 
 struct BinaryCrossEntropy <: AbstractLoss end
 
-function (l::BinaryCrossEntropy)(ŷ, y, weights=ones_like(y))
+function (l::BinaryCrossEntropy)(ŷ, y)
+    return Flux.binarycrossentropy(ŷ, y)
+end
+
+function (l::BinaryCrossEntropy)(ŷ, y, weights)
     l = Flux.binarycrossentropy(ŷ, y, agg=identity)
     return mean(l .* weights)
 end
 
 struct MeanAbsoluteError <: AbstractLoss end
 
-function (l::MeanAbsoluteError)(ŷ, y, weights=ones_like(y))
+function (l::MeanAbsoluteError)(ŷ, y)
+    return mean(abs.(ŷ .- y))
+end
+
+function (l::MeanAbsoluteError)(ŷ, y, weights)
     return mean(abs.(ŷ .- y) .* weights)
 end
 
 struct MeanSquaredError <: AbstractLoss end
 
-function (l::MeanSquaredError)(ŷ, y, weights=ones_like(y))
+function (l::MeanSquaredError)(ŷ, y)
+    return mean(((ŷ .- y) .^ 2))
+end
+
+function (l::MeanSquaredError)(ŷ, y, weights)
     return mean(((ŷ .- y) .^ 2) .* weights)
 end
 

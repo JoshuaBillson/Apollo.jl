@@ -1,5 +1,5 @@
 """
-    UNet(;encoder=StandardEncoder(batch_norm=true), input=nothing, channels=3, nclasses=1, batch_norm=true)
+    UNet(;encoder=StandardEncoder(batch_norm=true), input=nothing, channels=3, nclasses=1, batch_norm=true, activation=identity)
 
 Construct a UNet model.
 
@@ -10,36 +10,41 @@ Construct a UNet model.
 - `nclasses`: The number of output channels produced by the head.
 - `batch_norm`: Use batch normalization after each convolutional layer (default=true).
 """
-struct UNet{I,E,D,H}
+struct UNet{I,E,D,H,F}
     input::I
     encoder::E
     decoder::D
     head::H
+    activation::F
 end
 
 Flux.@layer UNet
 
-function UNet(;encoder=StandardEncoder(batch_norm=true), input=nothing, channels=3, nclasses=1, batch_norm=true)
+function UNet(;encoder=StandardEncoder(batch_norm=true), input=nothing, channels=3, nclasses=1, batch_norm=true, activation=identity)
     input = isnothing(input) ? ConvBlock((3,3), channels, first(filters(encoder)), Flux.relu, batch_norm=batch_norm) : input
     UNet(
         input,
         encoder,
-        nclasses=nclasses, 
-        batch_norm=batch_norm
+        activation, 
+        nclasses, 
+        batch_norm
     )
 end
-function UNet(input::I, encoder::E; nclasses=1, batch_norm=true) where {I,E}
+function UNet(input::I, encoder::E, activation, nclasses, batch_norm) where {I,E}
     return UNet(
         input, 
         encoder, 
         build_decoder(filters(encoder), [64, 128, 256, 512], batch_norm), 
-        Flux.Conv((1,1), 64=>nclasses)
+        Flux.Conv((1,1), 64=>nclasses), 
+        activation
     )
 end
 
 function (m::UNet)(x)
-    return @pipe m.input(x) |> m.encoder |> reverse |> m.decoder |> last |> m.head
+    return @pipe m.input(x) |> m.encoder |> reverse |> m.decoder |> last |> m.head |> m.activation
 end
+
+features(m::UNet, x) = @pipe m.input(x) |> m.encoder |> reverse |> m.decoder |> last
 
 function build_decoder(encoder_filters, decoder_filters, batch_norm)
     Flux.PairwiseFusion(
