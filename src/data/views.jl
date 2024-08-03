@@ -11,7 +11,7 @@ is_tile_source(::Any) = false
 is_tile_source(x::AbstractView) = is_tile_source(data(x))
 is_tile_source(x::AbstractView{<:Tuple}) = all(map(is_tile_source, data(x)))
 
-Base.getindex(x::AbstractView, i::AbstractVector) = map(j -> getindex(x, j), i) |> stack
+Base.getindex(x::AbstractView, i::AbstractVector) = map(j -> getindex(x, j), i) |> stackobs
 
 Base.iterate(x::AbstractView, state=1) = state > length(x) ? nothing : (x[state], state+1)
 
