@@ -119,6 +119,14 @@ LSTM
 SeparableConv
 ```
 
+# Inputs
+```@docs
+AbstractInput
+Single
+Series
+build_input
+```
+
 # Encoders
 
 ```@docs
@@ -129,6 +137,7 @@ ResNet50
 ResNet101
 ResNet152
 StandardEncoder
+build_encoder
 ```
 
 # Models

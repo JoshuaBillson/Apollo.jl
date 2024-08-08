@@ -195,6 +195,9 @@ julia> zip([1, 2, 3], [:a, :b, :c]) |> collect |> unzip
 unzip(x::AbstractVector) = x
 unzip(x::AbstractVector{<:Tuple}) = map(f -> getfield.(x, f), fieldnames(eltype(x)))
 
+_all_equal(f, xs) = map(f, xs) |> _all_equal
+_all_equal(xs) = all(==(first(xs)), xs)
+
 _crop(x::AbstractArray{<:Any,2}, xdims, ydims) = x[xdims,ydims]
 _crop(x::AbstractArray{<:Any,3}, xdims, ydims) = x[xdims,ydims,:]
 _crop(x::AbstractArray{<:Any,4}, xdims, ydims) = x[xdims,ydims,:,:]

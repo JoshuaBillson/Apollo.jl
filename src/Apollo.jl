@@ -28,6 +28,7 @@ include("data/transforms.jl")
 
 # Models
 include("models/layers.jl")
+include("models/input.jl")
 include("models/encoders.jl")
 include("models/classifiers.jl")
 include("models/unet.jl")
@@ -79,10 +80,15 @@ export step!, epoch!, best_epoch, current_epoch, scores, printscores
 # Layers
 export SeparableConv, ConvBlock, Conv, LSTM
 
+# Inputs
+export Series, Single
+export build_input
+
 # Encoders
 export AbstractEncoder, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, StandardEncoder
+export build_encoder
 
-# Backbones
+# Models
 export Classifier, UNet, R2UNet, DeeplabV3, SSC_CNN
 
 # Tasks

@@ -80,14 +80,10 @@ struct ObsView{D} <: AbstractView{D}
     ObsView(data, indices::AbstractVector{Int}) = ObsView(data, collect(indices))
     function ObsView(data::D, indices::Vector{Int}) where {D}
         _check_indices(data, indices)
-        return new{D}(data, indices)
+        new{D}(data, indices)
     end
 end
 
-function _check_indices(data::Tuple, indices)
-    @assert all(==(eachindex(first(data))), map(eachindex, data)) "Iterators have different indices!"
-    foreach(d -> _check_indices(d, indices), data)
-end
 function _check_indices(data, indices)
     for index in indices
         !(index in eachindex(data)) && throw(ArgumentError("Index $index not found!"))
@@ -97,7 +93,20 @@ end
 Base.length(x::ObsView) = length(x.indices)
 
 Base.getindex(x::ObsView, i::Int) = data(x)[x.indices[i]]
-Base.getindex(x::ObsView{<:Tuple}, i::Int) = map(d -> d[x.indices[i]], data(x))
+
+struct ZippedView{D} <: AbstractView{D}
+    data::D
+
+    ZippedView(data...) = ZippedView(tuple(data...))
+    function ZippedView(data::D) where {D<:Tuple}
+        @assert _all_equal(eachindex, data) "Iterators have different indices!"
+        return new{D}(data)
+    end
+end
+
+Base.length(x::ZippedView) = data(x) |> first |> length
+
+Base.getindex(x::ZippedView, i::Int) = map(d -> d[i], data(x))
 
 # Methods
 
@@ -140,17 +149,18 @@ _breakpoints(n::Int, at::AbstractVector) = _breakpoints(n, Tuple(at))
 Create a new iterator where the elements of each iterator in `data` are returned as a tuple.
 
 # Example
-```julia
-julia> zipobs(1:5, 41:45, rand([:cat, :dog], 5)) |> collect
+```jldoctest
+julia> zipobs(1:5, 41:45, [:a, :b, :c, :d, :e]) |> collect
 5-element Vector{Any}:
- (1, 41, :dog)
- (2, 42, :cat)
- (3, 43, :cat)
- (4, 44, :dog)
- (5, 45, :cat)
+ (1, 41, :a)
+ (2, 42, :b)
+ (3, 43, :c)
+ (4, 44, :d)
+ (5, 45, :e)
 ```
 """
-zipobs(data...) = ObsView(data, eachindex(first(data)))
+zipobs(data...) = zipobs(tuple(data...))
+zipobs(data::Tuple) = ZippedView(data)
 
 """
     repeatobs(data, n::Int)
