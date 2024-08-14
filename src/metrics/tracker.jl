@@ -19,7 +19,7 @@ struct Min <: Order
 end
 
 """
-    MetricDict(metrics...; prefix="")
+    MetricLogger(metrics...; prefix="")
 
 An object to track one or more metrics. Each metric is associated with a unique name, 
 which defaults to `name(metric)`. This can be overriden by providing a `name => metric`
@@ -27,41 +27,41 @@ pair. The `prefix` keyword adds a constant prefix string to every name.
 
 # Example 1
 ```jldoctest
-julia> md = MetricDict(Accuracy(), MIoU([0,1]); prefix="train_");
+julia> md = MetricLogger(Accuracy(), MIoU([0,1]); prefix="train_");
 
 julia> step!(md, [0, 0, 1, 0], [0, 0, 1, 1]);
 
 julia> md
-MetricDict(train_accuracy=0.75, train_MIoU=0.5833334)
+MetricLogger(train_accuracy=0.75, train_MIoU=0.5833334)
 
 julia> step!(md, [0, 0, 1, 1], [0, 0, 1, 1]);
 
 julia> md
-MetricDict(train_accuracy=0.875, train_MIoU=0.775)
+MetricLogger(train_accuracy=0.875, train_MIoU=0.775)
 
 julia> reset!(md)
 
 julia> md
-MetricDict(train_accuracy=0.0, train_MIoU=0.0)
+MetricLogger(train_accuracy=0.0, train_MIoU=0.0)
 ```
 
 # Example 2
 ```jldoctest
-julia> md = MetricDict("train_acc" => Accuracy(), "val_acc" => Accuracy());
+julia> md = MetricLogger("train_acc" => Accuracy(), "val_acc" => Accuracy());
 
 julia> step!(md, "train_acc", [0, 1, 1, 0], [1, 1, 1, 0]);  # update train_acc
 
 julia> step!(md, r"val_", [1, 1, 1, 0], [1, 1, 1, 0]);  # update metrics matching regex
 
 julia> md
-MetricDict(train_acc=0.75, val_acc=1.0)
+MetricLogger(train_acc=0.75, val_acc=1.0)
 ```
 """
-struct MetricDict{D<:OrderedDict}
+struct MetricLogger{D<:OrderedDict}
     metrics::D
 end
 
-function MetricDict(metrics...; prefix="")
+function MetricLogger(metrics...; prefix="")
     # Preprocess Metric Names
     metrics = @pipe map(_preprocess_metric, metrics) |> [(prefix * n) => m for (n, m) in _]
 
@@ -71,21 +71,21 @@ function MetricDict(metrics...; prefix="")
         metric_dict[name] = Metric(metric)
     end
 
-    # Return MetricDict
-    return MetricDict(metric_dict)
+    # Return MetricLogger
+    return MetricLogger(metric_dict)
 end
 
 _preprocess_metric(m::Pair{String, <:AbstractMetric}) = m
 _preprocess_metric(m::Pair{:Symbol, <:AbstractMetric}) = string(first(m)) => last(m)
 _preprocess_metric(m::AbstractMetric) = name(m) => m
 
-Base.keys(x::MetricDict) = keys(x.metrics)
-Base.getindex(x::MetricDict, i) = x.metrics[i]
-Base.setindex!(x::MetricDict, val, key...) = Base.setindex!(x.metrics, val, keys...)
-Base.pairs(x::MetricDict) = Base.pairs(x.metrics)
+Base.keys(x::MetricLogger) = keys(x.metrics)
+Base.getindex(x::MetricLogger, i) = x.metrics[i]
+Base.setindex!(x::MetricLogger, val, key...) = Base.setindex!(x.metrics, val, keys...)
+Base.pairs(x::MetricLogger) = Base.pairs(x.metrics)
 
-function Base.show(io::IO, ::MIME"text/plain", x::MetricDict)
-    printstyled(io, "MetricDict(")
+function Base.show(io::IO, ::MIME"text/plain", x::MetricLogger)
+    printstyled(io, "MetricLogger(")
     for (i, (name, metric)) in enumerate(x.metrics)
         printstyled(io, "$name")
         printstyled(io, "=")
@@ -96,23 +96,23 @@ function Base.show(io::IO, ::MIME"text/plain", x::MetricDict)
 end
 
 """
-    step!(x::MetricDict, ŷ, y)
-    step!(x::MetricDict, metric::String, ŷ, y)
-    step!(x::MetricDict, metric::Regex, ŷ, y)
+    step!(x::MetricLogger, ŷ, y)
+    step!(x::MetricLogger, metric::String, ŷ, y)
+    step!(x::MetricLogger, metric::Regex, ŷ, y)
 
 Update the metric for the current epoch using the provided prediction/label pair.
 """
-step!(md::MetricDict, ŷ, y) = step!(md, r".*", ŷ, y)
-step!(md::MetricDict, metric::String, ŷ, y) = update!(md.metrics[metric], ŷ, y)
-function step!(md::MetricDict, pattern::Regex, ŷ, y)
+step!(md::MetricLogger, ŷ, y) = step!(md, r".*", ŷ, y)
+step!(md::MetricLogger, metric::String, ŷ, y) = update!(md.metrics[metric], ŷ, y)
+function step!(md::MetricLogger, pattern::Regex, ŷ, y)
     foreach(metric -> step!(md, metric, ŷ, y), _filter_metrics(md, pattern))
 end
 
-_filter_metrics(md::MetricDict, pat::Regex) = filter(x -> contains(x, pat), keys(md.metrics))
+_filter_metrics(md::MetricLogger, pat::Regex) = filter(x -> contains(x, pat), keys(md.metrics))
 
-reset!(md::MetricDict) = foreach(reset!, values(md.metrics))
+reset!(md::MetricLogger) = foreach(reset!, values(md.metrics))
 
-function scores(md::MetricDict)
+function scores(md::MetricLogger)
     names = keys(md.metrics) .|> Symbol |> Tuple
     vals = map(compute, values(md.metrics))
     return NamedTuple{names}(vals)
@@ -173,8 +173,8 @@ struct Tracker{M}
     history::Vector{M}
 end
 
-Tracker(metrics...; kw...) = Tracker(MetricDict(metrics...; kw...))
-Tracker(metrics::MetricDict) = Tracker(metrics, Vector{typeof(metrics)}())
+Tracker(metrics...; kw...) = Tracker(MetricLogger(metrics...; kw...))
+Tracker(metrics::MetricLogger) = Tracker(metrics, Vector{typeof(metrics)}())
 
 # Tables Interface
 Tables.istable(::Type{Tracker}) = true
