@@ -1,4 +1,5 @@
 abstract type AbstractLoss end
+abstract type WeightedLoss <: AbstractLoss end
 
 struct BinaryCrossEntropy <: AbstractLoss end
 
@@ -6,7 +7,9 @@ function (l::BinaryCrossEntropy)(ŷ, y)
     return Flux.binarycrossentropy(ŷ, y)
 end
 
-function (l::BinaryCrossEntropy)(ŷ, y, weights)
+struct WeightedBinaryCrossEntropy <: WeightedLoss end
+
+function (l::WeightedBinaryCrossEntropy)(ŷ, y, weights)
     l = Flux.binarycrossentropy(ŷ, y, agg=identity)
     return mean(l .* weights)
 end
@@ -17,7 +20,9 @@ function (l::MeanAbsoluteError)(ŷ, y)
     return mean(abs.(ŷ .- y))
 end
 
-function (l::MeanAbsoluteError)(ŷ, y, weights)
+struct WeightedMeanAbsoluteError <: WeightedLoss end
+
+function (l::WeightedMeanAbsoluteError)(ŷ, y, weights)
     return mean(abs.(ŷ .- y) .* weights)
 end
 
@@ -27,7 +32,9 @@ function (l::MeanSquaredError)(ŷ, y)
     return mean(((ŷ .- y) .^ 2))
 end
 
-function (l::MeanSquaredError)(ŷ, y, weights)
+struct WeightedMeanSquaredError <: WeightedLoss end
+
+function (l::WeightedMeanSquaredError)(ŷ, y, weights)
     return mean(((ŷ .- y) .^ 2) .* weights)
 end
 
