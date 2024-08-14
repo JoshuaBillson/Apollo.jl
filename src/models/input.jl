@@ -21,7 +21,19 @@ abstract type AbstractInput end
 """
     build_input(x::AbstractInput, out_features::Int)
 
-Construct the given `AbstractInput` with the specified number of output features.
+Constructs an input layer based on the provided `AbstractInput` configuration and the specified number of output features.
+
+# Arguments
+- `x`: An `AbstractInput` object specifying the configuration and properties of the input layer to be built, such as input type (e.g., single-channel, multi-channel).
+- `out_features`: The number of output features (or channels) that the input layer should produce. This determines the dimensionality of the output from the input layer.
+
+# Returns
+A Flux layer representing the constructed input module, which can be used as the starting point of a neural network architecture.
+
+# Example
+```julia
+input_layer = build_input(Single(channels=4), 64)
+```
 """
 function build_input end
 
