@@ -94,6 +94,11 @@ Base.length(x::ObsView) = length(x.indices)
 
 Base.getindex(x::ObsView, i::Int) = data(x)[x.indices[i]]
 
+"""
+    ZippedView(data...)
+
+Construct an iterator that zips each element of the given subiterators into a `Tuple`.
+"""
 struct ZippedView{D} <: AbstractView{D}
     data::D
 
@@ -107,6 +112,37 @@ end
 Base.length(x::ZippedView) = data(x) |> first |> length
 
 Base.getindex(x::ZippedView, i::Int) = map(d -> d[i], data(x))
+
+"""
+    TileView(raster, tilesize::Int; stride=tilesize)
+
+An object that iterates over tiles cut from a given raster.
+
+# Parameters
+- `raster`: An `AbstractRaster` or `AbstractRasterStack` to be cut into tiles.
+- `tilesize`: The size (width and height) of the tiles.
+- `stride`: The horizontal and vertical distance between adjacent tiles.
+"""
+struct TileView{D<:HasDims,TS} <: AbstractView{D}
+    data::D
+    tiles::Vector{Tuple{Int,Int}}
+    tilesize::Int
+end
+
+function TileView(data::D, tilesize::Int; stride=tilesize) where {D<:HasDims}
+    width, height = map(x -> size(data, x), (X,Y))
+    xvals = 1:stride:width-tilesize+1
+    yvals = 1:stride:height-tilesize+1
+    tiles = [(x, y) for x in xvals for y in yvals]
+    return TileView{D,tilesize}(data, tiles, tilesize)
+end
+
+Base.length(x::TileView) = length(x.tiles)
+
+function Base.getindex(t::TileView{D,TS}, i::Int) where {D,TS}
+    (x, y) = t.tiles[i]
+    return t.data[X(x:x+TS-1), Y(y:y+TS-1)]
+end
 
 # Methods
 
