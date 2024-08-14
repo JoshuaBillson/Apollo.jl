@@ -33,8 +33,9 @@ AbstractView
 JoinedView
 MappedView
 ObsView
-TileSampler
-TileSeq
+TileView
+TransformedView
+ZippedView
 
 dropobs
 filterobs
@@ -99,7 +100,7 @@ update!
 # Performance Tracking
 ```@docs
 Tracker
-MetricDict
+MetricLogger
 Max
 Min
 
