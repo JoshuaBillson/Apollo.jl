@@ -18,6 +18,25 @@ abstract type AbstractEncoder{F} end
 
 filters(::AbstractEncoder{F}) where {F} = F
 
+"""
+    build_encoder(encoder::AbstractEncoder)
+
+Constructs an encoder model based on the provided `AbstractEncoder` configuration.
+
+# Parameters
+- `encoder`: An `AbstractEncoder` object specifying the architecture and configuration of the encoder to be built.
+
+# Returns
+A standard `Flux.Chain` layer containing each block of the encoder.
+The returned encoder is ready to be integrated into more complex architectures like U-Net or used as a standalone feature extractor.
+
+# Example
+```julia
+encoder = build_encoder(ResNet50(weights=:ImageNet))
+```
+"""
+function build_encoder end
+
 # ResNet18
 
 """
@@ -116,12 +135,6 @@ end
 
 StandardEncoder(;batch_norm=true) = StandardEncoder(batch_norm)
 
-"""
-    build_encoder(x::AbstractEncoder)
-
-Construct the given `AbstractEncoder`. Returns a standard `Flux.Chain` layer containing
-each block of the encoder.
-"""
 function build_encoder(e::StandardEncoder)
     Flux.Chain(
         Flux.Chain(Flux.MaxPool((2,2)), ConvBlock((3,3), 64, 128, Flux.relu, batch_norm=e.batch_norm)), 
@@ -132,7 +145,6 @@ function build_encoder(e::StandardEncoder)
 end
 
 # Base ResNet Constructor
-
 resnet(depth, ::Nothing) = resnet(depth, :nothing)
 function resnet(depth, weights::Symbol)
     # Construct Backbone
