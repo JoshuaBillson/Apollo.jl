@@ -12,6 +12,22 @@ Super type of all random transforms.
 abstract type RandomTransform <: AbstractTransform end
 
 """
+    TransformedView(data, dtype, transform::AbstractTransform).
+
+An iterator that applied the provided `transform` to each batch in data.
+The transform will modify each element according to the specified `dtype`.
+"""
+struct TransformedView{D,DT,T} <: AbstractView{D}
+    data::D
+    dtype::DT
+    transform::T
+end
+
+Base.length(x::TransformedView) = length(data(x))
+
+Base.getindex(x::TransformedView, i::Int) = apply(x.transform, x.dtype, x.data[i], rand(1:1000))
+
+"""
     transform(t::AbstractTransform, dtype::DType, x)
     transform(t::AbstractTransform, dtypes::Tuple, x::Tuple)
 
@@ -19,7 +35,7 @@ Apply the transformation `t` to the input `x` with data type `dtype`.
 """
 transform(t::AbstractTransform, dtype, data) = apply(t, dtype, data, rand(1:1000))
 function transform(t::AbstractTransform, dtype, data::AbstractView)
-    return MappedView(batch -> transform(t, dtype, batch), data)
+    return TransformedView(data, dtype, t)
 end
 
 """
