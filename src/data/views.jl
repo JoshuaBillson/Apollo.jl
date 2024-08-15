@@ -28,8 +28,6 @@ struct MappedView{F<:Function,D} <: AbstractView{D}
     data::D
 end
 
-MappedView(f::Function, data::Tuple) = MappedView(f, ObsView(data, eachindex(first(data))))
-
 Base.length(x::MappedView) = length(data(x))
 
 Base.getindex(x::MappedView, i::Int) = x.f(x.data[i])
@@ -139,6 +137,10 @@ function Base.getindex(t::TileView{D,TS}, i::Int) where {D,TS}
     return t.data[X(x:x+TS-1), Y(y:y+TS-1)]
 end
 
+function Base.show(io::IO, x::TileView{D,TS}) where {D, TS}
+    printstyled(io, "TileSampler(tile_size=$TS, num_tiles=$(length(x)))")
+end
+
 # Methods
 
 """
@@ -163,7 +165,7 @@ julia> splitobs(1:100, at=(0.7, 0.2), shuffle=false)
 splitobs(data; kwargs...) = splitobs(Random.default_rng(), data; kwargs...)
 splitobs(rng::Random.AbstractRNG, data; kwargs...) = map(x -> ObsView(data, x), splitobs(rng, eachindex(data); kwargs...))
 function splitobs(rng::Random.AbstractRNG, data::AbstractVector{Int}; at=0.8, shuffle=true)
-    sum(at) >= 1 && throw(ArgumentError("'at' cannot sum to more than 1!"))
+    sum(at) > 1 && throw(ArgumentError("'at' cannot sum to more than 1!"))
     indices = shuffle ? Random.randperm(rng, length(data)) : collect(1:length(data))
     breakpoints = _breakpoints(length(data), at)
     starts = (1, (breakpoints .+ 1)...)
@@ -236,7 +238,12 @@ Randomly sample `n` elements from `data` without replacement. `rng` may be optio
 provided for reproducible results.
 """
 sampleobs(data, n::Int) = sampleobs(Random.default_rng(), data, n)
-sampleobs(rng::Random.AbstractRNG, data, n::Int) = takeobs(data, Random.randperm(rng, length(data))[1:n])
+function sampleobs(rng::Random.AbstractRNG, data, n::Int)
+    if (n > length(data)) || (n < 0)
+        throw(ArgumentError("n must be between 0 and $(length(data)) (received $n)."))
+    end
+    takeobs(data, Random.randperm(rng, length(data))[1:n])
+end
 
 """
     shuffleobs([rng=default_rng()], data)

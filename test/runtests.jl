@@ -66,6 +66,8 @@ end
     @test splitobs(Random.MersenneTwister(123), 1:10, at=[0.3, 0.5])[1] == [8, 7, 5]
     @test splitobs(Random.MersenneTwister(123), 1:10, at=[0.3, 0.5])[2] == [3, 4, 1, 6, 10]
     @test splitobs(Random.MersenneTwister(123), 1:10, at=[0.3, 0.5])[3] == [2, 9]
+    @test_throws ArgumentError splitobs(1:10, at=[0.3, 0.8])
+    @test map(length, splitobs(1:10, at=[0.3, 0.7])) == [3, 7, 0]
 
     # splitobs without shuffle
     @test first(splitobs(Random.MersenneTwister(123), 1:10, at=0.7; shuffle=false)) == [1, 2, 3, 4, 5, 6, 7]
@@ -76,6 +78,7 @@ end
 
     # takeobs
     @test all(takeobs(v1, [2, 5, 8, 9]) .== x1[[2, 5, 8, 9]])  # takeobs
+    @test_throws ArgumentError takeobs(v1, [0, 1, 2])
 
     # dropobs
     @test all(dropobs(v1, [1,2,3,5,6,8,9,10]) .== x1[[4,7]])  # dropobs
@@ -89,7 +92,18 @@ end
 
     # sampleobs
     @test all(sampleobs(Random.MersenneTwister(126), v2, 4) .== [22, 28, 25, 30])
+    @test length(sampleobs(v1, 0)) == 0
+    @test_throws ArgumentError sampleobs(v2, -1)
+    @test_throws ArgumentError sampleobs(v2, length(v2) + 1)
 
     # shuffleobs
     @test all(shuffleobs(Random.MersenneTwister(123), v1) .== [8,7,5,3,4,1,6,10,2,9])
+
+    # TileView
+    tile = Raster(rand(UInt16, 256, 256, 2, 8), (X, Y, Band, Ti))
+    @test length(TileView(tile, 64)) == 16
+    @test length(TileView(tile, 64, stride=32)) == 49
+    @test map(size, TileView(tile, 64)[1:4:16]) == [(64, 64, 2, 8), (64, 64, 2, 8), (64, 64, 2, 8), (64, 64, 2, 8)]
+    @test size(mapobs(tensor, TileView(tile, 64))[1:4:16]) == (64, 64, 2, 8, 4)
+    @test typeof(mapobs(tensor, TileView(tile, 64))[1:4:16]) == Array{Float32, 5}
 end
