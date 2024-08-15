@@ -22,8 +22,6 @@ function TileSampler(data::D, tilesize::Int; stride=tilesize) where {D<:HasDims}
     return TileSampler{D,tilesize}(data, tiles, tilesize)
 end
 
-is_tile_source(::TileSampler) = true
-
 Base.length(x::TileSampler) = length(x.tiles)
 
 Base.getindex(x::TileSampler, i::Int) = getindex(x, [i]) |> first

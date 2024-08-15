@@ -7,10 +7,6 @@ abstract type AbstractView{D} end
 
 data(x::AbstractView) = x.data
 
-is_tile_source(::Any) = false
-is_tile_source(x::AbstractView) = is_tile_source(data(x))
-is_tile_source(x::AbstractView{<:Tuple}) = all(map(is_tile_source, data(x)))
-
 Base.getindex(x::AbstractView, i::AbstractVector) = map(j -> getindex(x, j), i) |> stackobs
 
 Base.iterate(x::AbstractView, state=1) = state > length(x) ? nothing : (x[state], state+1)
@@ -48,7 +44,6 @@ if they were concatenated into a single list.
 """
 struct JoinedView{D} <: AbstractView{D}
     data::D
-    JoinedView(data) = JoinedView((data,))
     JoinedView(data...) = JoinedView(data)
     JoinedView(data::D) where {D <: Tuple} = new{D}(data)
 end
@@ -102,7 +97,7 @@ Construct an iterator that zips each element of the given subiterators into a `T
 struct ZippedView{D} <: AbstractView{D}
     data::D
 
-    ZippedView(data...) = ZippedView(tuple(data...))
+    ZippedView(data...) = ZippedView(data)
     function ZippedView(data::D) where {D<:Tuple}
         @assert _all_equal(eachindex, data) "Iterators have different indices!"
         return new{D}(data)
@@ -147,7 +142,7 @@ end
 # Methods
 
 """
-    splitobs(data; at=0.8, shuffle=true)
+    splitobs([rng=default_rng()], data; at=0.8, shuffle=true)
 
 Return a set of indices that splits the given observations according to the given break points.
 
@@ -165,10 +160,11 @@ julia> splitobs(1:100, at=(0.7, 0.2), shuffle=false)
  [91, 92, 93, 94, 95, 96, 97, 98, 99, 100]
 ```
 """
-splitobs(data; kwargs...) = map(x -> ObsView(data, x), splitobs(eachindex(data); kwargs...))
-function splitobs(data::AbstractVector{Int}; at=0.8, shuffle=true)
+splitobs(data; kwargs...) = splitobs(Random.default_rng(), data; kwargs...)
+splitobs(rng::Random.AbstractRNG, data; kwargs...) = map(x -> ObsView(data, x), splitobs(rng, eachindex(data); kwargs...))
+function splitobs(rng::Random.AbstractRNG, data::AbstractVector{Int}; at=0.8, shuffle=true)
     sum(at) >= 1 && throw(ArgumentError("'at' cannot sum to more than 1!"))
-    indices = shuffle ? Random.randperm(length(data)) : collect(1:length(data))
+    indices = shuffle ? Random.randperm(rng, length(data)) : collect(1:length(data))
     breakpoints = _breakpoints(length(data), at)
     starts = (1, (breakpoints .+ 1)...)
     ends = ((breakpoints)..., length(data))
@@ -234,18 +230,18 @@ Lazily apply the function `f` to each element in `data`.
 mapobs(f, data) = MappedView(f, data)
 
 """
-    sampleobs([rng], data, n)
+    sampleobs([rng=default_rng()], data, n)
 
 Randomly sample `n` elements from `data` without replacement. `rng` may be optionally
 provided for reproducible results.
 """
-sampleobs(rng, data, n::Int) = takeobs(data, Random.shuffle(rng, eachindex(data))[1:n])
-sampleobs(data, n::Int) = takeobs(data, Random.shuffle(eachindex(data))[1:n])
+sampleobs(data, n::Int) = sampleobs(Random.default_rng(), data, n)
+sampleobs(rng::Random.AbstractRNG, data, n::Int) = takeobs(data, Random.randperm(rng, length(data))[1:n])
 
 """
-    shuffleobs([rng], data)
+    shuffleobs([rng=default_rng()], data)
 
 Randomly shuffle the elements of `data`. Provide `rng` for reproducible results.
 """
-shuffleobs(rng, data) = takeobs(data, Random.shuffle(rng, eachindex(data)))
-shuffleobs(data) = takeobs(data, Random.shuffle(eachindex(data)))
+shuffleobs(data) = shuffleobs(Random.default_rng(), data)
+shuffleobs(rng::Random.AbstractRNG, data) = takeobs(data, Random.randperm(rng, length(data)))
