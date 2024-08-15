@@ -89,7 +89,7 @@ function (m::LSTM)(x::AbstractArray{<:AbstractFloat,5})
 
     # Run Forward Pass
     @pipe permutedims(x, (3, 1, 2, 4, 5)) |>             # Permute to (CWHLN)
-    [selectdim(_, 4, i) for i in 1:size(x, 4)] |>        # Split Time Series
+    [_[:,:,:,i,:] for i in 1:size(x, 4)] |>              # Split Time Series
     [reshape(x, (2,:)) for x in _] |>                    # Reshape to (CN)
     [m.lstm(x) for x in _] |>                            # Apply LSTM to each time stamp
     last |>                                              # Keep Last Prediction
