@@ -155,3 +155,19 @@ end
     @test size(mapobs(tensor, TileView(tile, 64))[1:4:16]) == (64, 64, 2, 8, 4)
     @test typeof(mapobs(tensor, TileView(tile, 64))[1:4:16]) == Array{Float32, 5}
 end
+
+@testset "models" begin
+    # Test Data
+    x1 = rand(rng, Float32, 128, 128, 4, 1)
+    x2 = rand(rng, Float32, 128, 128, 2, 6, 1)
+
+    # UNet
+    unet = UNet(input=Single(channels=4), encoder=ResNet18())
+    unet_ts = UNet(input=Series(channels=2), encoder=ResNet18())
+    @test size(unet(x1)) == (128, 128, 1, 1)
+    @test size(unet_ts(x2)) == (128, 128, 1, 1)
+
+    # Classifier
+    classifier = Classifier(input=Single(channels=4), encoder=ResNet18(), nclasses=10)
+    @test size(classifier(x1)) == (10, 1)
+end
