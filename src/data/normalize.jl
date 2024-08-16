@@ -37,8 +37,13 @@ and the standard deviation is 1.
 - `σ`: A `Vector` of standard deviations for each index in `dim`.
 - `dim`: The dimension along which to normalize the input array.
 """
-normalize(x::AbstractRaster, μ, σ; dim=3) = Rasters.modify(x -> normalize(x, μ, σ; dim=dim), x)
-function normalize(x::AbstractArray, μ::AbstractVector, σ::AbstractVector; dim=3)
+function normalize(x::AbstractArray{<:Real}, μ::AbstractArray{<:Real}, σ::AbstractArray{<:Real}; dim=3)
+    return _normalize(x, μ, σ, dim)
+end
+
+_normalize(x::AbstractRaster, μ, σ, dim::Rasters.Dimension) = _normalize(x, μ, σ, Rasters.dimnum(x, dim))
+_normalize(x::AbstractRaster, μ, σ, dim::Int) = Rasters.modify(x -> _normalize(x, μ, σ, dim), x)
+function _normalize(x::AbstractArray, μ, σ, dim::Int)
     μ = vec2array(μ, x, dim)
     σ = vec2array(σ, x, dim)
     return (x .- μ) ./ σ

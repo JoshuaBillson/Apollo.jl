@@ -15,7 +15,7 @@ end
 Apply the reducer `f` to all non-missing elements in each layer of `x`.
 """
 function foldlayers(f, x::AbstractRasterStack)
-    map(f ∘ collect ∘ skipmissing, layers(x))
+    map(f ∘ skipmissing ∘ vec ∘ replace_missing ∘ read, layers(x))
 end
 
 """
@@ -41,7 +41,7 @@ julia> μ = folddims(mean, raster, dims=Band)
 ```
 """
 function folddims(f, x::AbstractRaster; dims=Band)
-    map(f ∘ collect ∘ skipmissing, eachslice(x, dims=dims)).data
+    map(f ∘ skipmissing ∘ vec ∘ replace_missing ∘ read, eachslice(x, dims=dims)).data
 end
 
 """

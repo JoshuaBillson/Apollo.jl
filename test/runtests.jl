@@ -4,47 +4,94 @@ using Rasters
 using Random
 using StableRNGs
 
-@testset "transforms" begin
+const rng = StableRNG(123)
+
+@testset "tensor" begin
     # Test Data
-    x = Raster(rand(Float32, 256, 256, 3), (X, Y, Band))
-    y = Raster(rand(Float32, 3, 256, 256), (Band, X, Y))
-    z = Raster(rand(Float32, 128, 128, 3), (X, Y, Band))
-    t1 = Raster(rand(Float32, 128, 128, 3, 9), (X, Y, Band, Ti))
-    t2 = Raster(rand(Float32, 3, 128, 128, 9), (Band, X, Y, Ti))
-    b = Raster(rand(Float32, 256, 256), (X, Y))
+    r1 = Raster(rand(rng, Float32, 256, 256, 3), (X, Y, Band))
+    r2 = Raster(rand(rng, Float32, 3, 256, 256), (Band, X, Y))
+    r3 = Raster(rand(rng, Float32, 128, 128, 3), (X, Y, Band))
+    r4 = Raster(rand(rng, Float32, 128, 128, 3, 9), (X, Y, Band, Ti))
+    r5 = Raster(rand(rng, Float32, 3, 128, 128, 9), (Band, X, Y, Ti))
+    r6 = Raster(rand(rng, Float32, 256, 256), (X, Y))
 
     # tensor
-    @test size(tensor(x)) == (256, 256, 3, 1)  # simple case
-    @test size(tensor(x, y)) == (256, 256, 3, 2)  # Mutiple rasters with different dim order
-    @test size(tensor(t1)) == (128, 128, 3, 9, 1) 
-    @test size(tensor(t2)) == (128, 128, 3, 9, 1)
-    @test size(tensor(t1, t2)) == (128, 128, 3, 9, 2)
-    @test size(tensor(b, b)) == (256, 256, 1, 2)  # Missing Bands
-    @test_throws DimensionMismatch tensor(x, y, t1)  # Extra Dimension
-    @test_throws DimensionMismatch tensor(t1, t2, x)  # Missing Dimension
-    @test_throws DimensionMismatch tensor(x, y, b)  # Mismatched Sizes
-    @test_throws DimensionMismatch tensor(x, y, z)  # Mismatched Sizes
+    @test size(tensor(r1)) == (256, 256, 3, 1)  # simple case
+    @test size(tensor(r1, r2)) == (256, 256, 3, 2)  # Mutiple rasters with different dim order
+    @test size(tensor(r4)) == (128, 128, 3, 9, 1) 
+    @test size(tensor(r5)) == (128, 128, 3, 9, 1)
+    @test size(tensor(r4, r5)) == (128, 128, 3, 9, 2)
+    @test size(tensor(r6, r6)) == (256, 256, 1, 2)  # Missing Bands
+    @test_throws DimensionMismatch tensor(r1, r2, r4)  # Extra Dimension
+    @test_throws DimensionMismatch tensor(r4, r5, r1)  # Missing Dimension
+    @test_throws DimensionMismatch tensor(r1, r2, r6)  # Missing Dimension
+    @test_throws DimensionMismatch tensor(r1, r2, r3)  # Mismatched Sizes
 end
 
 @testset "utilities" begin
     # Test Data
-    x = Raster(rand(Float32, 256, 256, 3), (X, Y, Band))
-    y = Raster(rand(Float32, 3, 256, 256), (Band, X, Y))
-    z = Raster(rand(Float32, 128, 128, 3), (X, Y, Band))
-    t1 = Raster(rand(Float32, 128, 128, 3, 9), (X, Y, Band, Ti))
-    t2 = Raster(rand(Float32, 3, 128, 128, 9), (Band, X, Y, Ti))
-    b = Raster(rand(Float32, 256, 256), (X, Y))
+    r1 = Raster(rand(rng, 256, 256), (X, Y))
+    r2 = Raster(rand(rng, 256, 256, 3), (X, Y, Band))
+    r3 = Raster(rand(rng, 256, 256, 3, 9), (X, Y, Band, Ti))
+    r4 = mask(r2, with=Raster(rand(Bool, 256, 256, 3), (X,Y,Band), missingval=false))
+    rs1 = RasterStack(r2, layersfrom=Band)
+    rs2 = RasterStack(r3, layersfrom=Ti)
+    rs3 = mask(rs1, with=Raster(rand(Bool, 256, 256), (X,Y), missingval=false))
 
-    x = Raster(rand(Float32, 128, 128), (X,Y))
-    @test size(putdim(x, Band)) == (128,128,1)
-    @test hasdim(putdim(x, Band), Band)
-    @test size(putdim(x, Ti)) == (128,128,1)
-    @test hasdim(putdim(x, Ti), Ti)
-    @test putdim(x, X) == x
-    @test size(putdim(x, (Z, Band, Ti, X, Y))) == (128,128,1,1,1)
-    @test hasdim(putdim(x, (Z, Band, Ti, X, Y)), Z)
-    @test hasdim(putdim(x, (Z, Band, Ti, X, Y)), Band)
-    @test hasdim(putdim(x, (Z, Band, Ti, X, Y)), Ti)
+    # catlayers
+    @test size(catlayers(rs1, Band)) == (256,256,3)
+    @test catlayers(rs1, Band) isa Raster
+    @test size(catlayers(rs2, Ti)) == (256,256,3,9)
+    @test catlayers(rs2, Ti) isa Raster
+    @test size(catlayers(rs2, Band)) == (256,256,27)
+    @test catlayers(rs2, Ti) isa Raster
+
+    # foldlayers
+    @test foldlayers(sum, rs1).Band_1 == sum(rs1[:Band_1])
+    @test foldlayers(sum, rs1).Band_2 == sum(rs1[:Band_2])
+    @test foldlayers(sum, rs1).Band_3 == sum(rs1[:Band_3])
+    @test foldlayers(sum, rs3).Band_1 == (rs3[:Band_1] |> replace_missing |> vec |> skipmissing |> sum)
+    @test foldlayers(sum, rs3).Band_2 == (rs3[:Band_2] |> replace_missing |> vec |> skipmissing |> sum)
+    @test foldlayers(sum, rs3).Band_3 == (rs3[:Band_3] |> replace_missing |> vec |> skipmissing |> sum)
+
+    # folddims
+    @test folddims(sum, r3; dims=Band)[1] == sum(r3[Band(1)])
+    @test folddims(sum, r3; dims=Band)[2] == sum(r3[Band(2)])
+    @test folddims(sum, r3; dims=Band)[3] == sum(r3[Band(3)])
+    @test folddims(sum, r4)[1] == (r4[Band(1)] |> replace_missing |> vec |> skipmissing |> sum)
+    @test folddims(sum, r4)[2] == (r4[Band(2)] |> replace_missing |> vec |> skipmissing |> sum)
+    @test folddims(sum, r4)[3] == (r4[Band(3)] |> replace_missing |> vec |> skipmissing |> sum)
+
+    # putdim
+    @test size(putdim(r1, Band)) == (256,256,1)
+    @test hasdim(putdim(r1, Band), Band)
+    @test size(putdim(r2, Ti)) == (256,256,3,1)
+    @test hasdim(putdim(r2, Ti), Ti)
+    @test putdim(r2, (X,Y,Band)) == r2
+    @test size(putdim(r2, (Z, Band, Ti, X, Y))) == (256,256,3,1,1)
+    @test hasdim(putdim(r1, (Z, Band, Ti, X, Y)), Z)
+    @test hasdim(putdim(r1, (Z, Band, Ti, X, Y)), Band)
+    @test hasdim(putdim(r1, (Z, Band, Ti, X, Y)), Ti)
+
+    # ones_like
+    @test size(ones_like(r3)) == (256,256,3,9)
+    @test ones_like(r3) isa Array{Float64,4}
+    @test all(==(1), ones_like(r3))
+
+    # zeros_like
+    @test size(zeros_like(r3)) == (256,256,3,9)
+    @test zeros_like(r3) isa Array{Float64,4}
+    @test all(==(0), zeros_like(r3))
+
+    # putobs
+    @test size(putobs(r1)) == (256, 256, 1)
+    @test size(putobs(r2)) == (256, 256, 3, 1)
+    @test size(putobs(r3)) == (256, 256, 3, 9, 1)
+
+    # rmobs
+    @test size(rmobs(putobs(r1))) == (256, 256)
+    @test size(rmobs(putobs(r2))) == (256, 256, 3)
+    @test size(rmobs(putobs(r3))) == (256, 256, 3, 9)
 end
 
 @testset "views" begin
@@ -101,7 +148,7 @@ end
     @test all(shuffleobs(StableRNGs.StableRNG(123), v1) .== [4, 7, 2, 1, 3, 8, 5, 6, 10, 9])
 
     # TileView
-    tile = Raster(rand(UInt16, 256, 256, 2, 8), (X, Y, Band, Ti))
+    tile = Raster(rand(rng, UInt16, 256, 256, 2, 8), (X, Y, Band, Ti))
     @test length(TileView(tile, 64)) == 16
     @test length(TileView(tile, 64, stride=32)) == 49
     @test map(size, TileView(tile, 64)[1:4:16]) == [(64, 64, 2, 8), (64, 64, 2, 8), (64, 64, 2, 8), (64, 64, 2, 8)]
