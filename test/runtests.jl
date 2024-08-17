@@ -160,14 +160,25 @@ end
     # Test Data
     x1 = rand(rng, Float32, 128, 128, 4, 1)
     x2 = rand(rng, Float32, 128, 128, 2, 6, 1)
+    encoders = [ResNet18(), ResNet34(), ResNet50(), ResNet101(), ResNet152()]
 
     # UNet
-    unet = UNet(input=Single(channels=4), encoder=ResNet18())
-    unet_ts = UNet(input=Series(channels=2), encoder=ResNet18())
-    @test size(unet(x1)) == (128, 128, 1, 1)
-    @test size(unet_ts(x2)) == (128, 128, 1, 1)
+    for encoder in encoders
+        unet = UNet(input=Single(channels=4), encoder=encoder)
+        unet_ts = UNet(input=Series(channels=2), encoder=encoder)
+        @test size(unet(x1)) == (128, 128, 1, 1)
+        @test size(unet_ts(x2)) == (128, 128, 1, 1)
+    end
 
     # Classifier
-    classifier = Classifier(input=Single(channels=4), encoder=ResNet18(), nclasses=10)
-    @test size(classifier(x1)) == (10, 1)
+    for encoder in encoders
+        classifier = Classifier(input=Single(channels=4), encoder=encoder, nclasses=10)
+        @test size(classifier(x1)) == (10, 1)
+    end
+
+    # SSC_CNN
+    ssc_cnn = SSC_CNN()
+    lr = rand(Float32, 64, 64, 6, 1);
+    hr = rand(Float32, 64, 64, 4, 1);
+    @test size(ssc_cnn(lr, hr)) == (64, 64, 6, 1)
 end
