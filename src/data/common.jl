@@ -15,6 +15,8 @@ struct Image{N} <: DType{N} end
 Image() = Image(:x)
 Image(x::Symbol) = Image{x}()
 
+Base.show(io::IO, x::Image{N}) where N = print(io, "Image(:$N)")
+
 """
     Mask([name])
 

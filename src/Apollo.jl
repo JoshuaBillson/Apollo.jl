@@ -68,9 +68,7 @@ export build_encoder
 # Models
 include("models/classifiers.jl")
 include("models/unet.jl")
-include("models/deeplab.jl")
 include("models/ssc_cnn.jl")
-include("models/r2unet.jl")
-export Classifier, UNet, R2UNet, DeeplabV3, SSC_CNN
+export Classifier, UNet, SSC_CNN
 
 end

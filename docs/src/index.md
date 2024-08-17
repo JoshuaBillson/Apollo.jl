@@ -145,8 +145,6 @@ build_encoder
 
 ```@docs
 Classifier
-DeeplabV3
-R2UNet
 SSC_CNN
 UNet
 ```

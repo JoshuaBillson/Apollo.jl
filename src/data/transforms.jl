@@ -73,6 +73,8 @@ function apply(t::Tensor, ::DType, x, ::Int)
     return tensor(t.precision, x; layerdim=t.layerdim)
 end
 
+description(x::Tensor) = "Transform to tensor."
+
 # Normalize Transform
 
 """
@@ -97,6 +99,8 @@ function Normalize(μ, σ; dim=3)
 end
 
 apply(t::Normalize, ::Image, x, ::Int) = normalize(x, t.μ, t.σ, dim=t.dim)
+
+description(x::Normalize) = "Normalize by channel dimension."
 
 # DeNormalize Transform
 
@@ -123,6 +127,8 @@ end
 
 apply(t::DeNormalize, ::Image, x, ::Int) = denormalize(x, t.μ, t.σ, dim=t.dim)
 
+description(x::DeNormalize) = "Denormalize by channel dimension."
+
 # Resample Transform
 
 """
@@ -147,6 +153,8 @@ function apply(t::Resample, ::Image, x::HasDims, ::Int)
     return t.scale > 1 ? resample(x, t.scale, :bilinear) : resample(x, t.scale, :average)
 end
 
+description(x::Resample) = "Resample by a factor of $(x.scale)."
+
 # Crop Transform
 
 """
@@ -164,6 +172,8 @@ Crop(size::Int) = Crop((size, size))
 function apply(t::Crop, ::DType, x::AbstractArray, ::Int)
     return crop(x, t.size)
 end
+
+description(x::Crop) = "Crop tiles to $(first(x.size))x$(last(x.size))."
 
 # Random Crop
 
@@ -186,6 +196,8 @@ function apply(t::RandomCrop, ::DType, x::AbstractArray, seed::Int)
     ul = max.(ceil.(Int, (xpad, ypad) .* outcome), 1)
     return crop(x, t.size, ul)
 end
+
+description(x::RandomCrop) = "Random crop to $(first(x.size))x$(last(x.size))."
 
 # Filtered Transform
 
@@ -221,6 +233,8 @@ function apply(t::FilteredTransform{D1,T}, dtype::D2, x, seed::Int) where {D1<:D
     D1 == D2 ? apply(t.transform, dtype, x, seed) : x
 end
 
+description(x::FilteredTransform) = "$(description(x.transform)) ($(x.dtype))"
+
 (*)(dtype::DType, t::AbstractTransform) = FilteredTransform(dtype, t)
 (*)(dtypes::Tuple, t::AbstractTransform) = ComposedTransform(map(dtype -> dtype * t, dtypes)...)
 
@@ -254,6 +268,13 @@ end
 
 function apply(t::ComposedTransform, dtype::DType, x, seed::Int)
     return reduce((acc, trans) -> apply(trans, dtype, acc, seed), t.transforms, init=x)
+end
+
+function Base.show(io::IO, x::ComposedTransform)
+    print(io, "$(length(x.transforms))-step ComposedTransform:")
+    for (i, t) in enumerate(x.transforms) 
+     print(io, "\n  $i) $(description(t))")
+    end
 end
 
 (|>)(a::AbstractTransform, b::AbstractTransform) = ComposedTransform(a, b)
