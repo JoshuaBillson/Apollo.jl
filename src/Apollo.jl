@@ -19,7 +19,7 @@ export linear_stretch, rgb, binmask, mosaicview
 # Views
 include("data/common.jl")
 include("data/views.jl")
-export AbstractView, TileView, MappedView, JoinedView, ObsView, ZippedView, TransformedView
+export AbstractIterator, TileView, MappedView, JoinedView, ObsView, ZippedView, TransformedView
 export splitobs, zipobs, repeatobs, takeobs, dropobs, filterobs, mapobs, sampleobs, shuffleobs
 
 # Transforms
@@ -45,7 +45,6 @@ export step!, epoch!, best_epoch, current_epoch, scores, printscores
 
 # Training
 include("training/losses.jl")
-include("training/tasks.jl")
 include("training/training.jl")
 export AbstractLoss, BinaryCrossEntropy, MeanAbsoluteError, MeanSquaredError, DiceLoss, MixedLoss, MaskedLoss
 export WeightedLoss, WeightedBinaryCrossEntropy, WeightedMeanAbsoluteError, WeightedMeanSquaredError

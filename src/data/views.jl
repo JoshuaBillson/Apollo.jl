@@ -3,18 +3,18 @@
 """
 Super type of all iterators.
 """
-abstract type AbstractView{D} end
+abstract type AbstractIterator{D} end
 
-data(x::AbstractView) = x.data
+data(x::AbstractIterator) = x.data
 
-Base.getindex(x::AbstractView, i::AbstractVector) = map(j -> getindex(x, j), i) |> stackobs
+Base.getindex(x::AbstractIterator, i::AbstractVector) = map(j -> getindex(x, j), i) |> stackobs
 
-Base.iterate(x::AbstractView, state=1) = state > length(x) ? nothing : (x[state], state+1)
+Base.iterate(x::AbstractIterator, state=1) = state > length(x) ? nothing : (x[state], state+1)
 
-Base.firstindex(x::AbstractView) = 1
-Base.lastindex(x::AbstractView) = length(x)
+Base.firstindex(x::AbstractIterator) = 1
+Base.lastindex(x::AbstractIterator) = length(x)
 
-Base.keys(x::AbstractView) = Base.OneTo(length(x))
+Base.keys(x::AbstractIterator) = Base.OneTo(length(x))
 
 # MappedView
 
@@ -23,7 +23,7 @@ Base.keys(x::AbstractView) = Base.OneTo(length(x))
 
 An iterator which lazily applies `f` to each element in `data` when requested.
 """
-struct MappedView{F<:Function,D} <: AbstractView{D}
+struct MappedView{F<:Function,D} <: AbstractIterator{D}
     f::F
     data::D
 end
@@ -40,7 +40,7 @@ Base.getindex(x::MappedView, i::Int) = x.f(x.data[i])
 An object that iterates over each element in the iterators given by `data` as
 if they were concatenated into a single list.
 """
-struct JoinedView{D} <: AbstractView{D}
+struct JoinedView{D} <: AbstractIterator{D}
     data::D
     JoinedView(data...) = JoinedView(data)
     JoinedView(data::D) where {D <: Tuple} = new{D}(data)
@@ -66,7 +66,7 @@ end
 
 Construct an iterator over the elements specified by `indices` in `data`.
 """
-struct ObsView{D} <: AbstractView{D}
+struct ObsView{D} <: AbstractIterator{D}
     data::D
     indices::Vector{Int}
 
@@ -92,7 +92,7 @@ Base.getindex(x::ObsView, i::Int) = data(x)[x.indices[i]]
 
 Construct an iterator that zips each element of the given subiterators into a `Tuple`.
 """
-struct ZippedView{D} <: AbstractView{D}
+struct ZippedView{D} <: AbstractIterator{D}
     data::D
 
     ZippedView(data...) = ZippedView(data)
@@ -116,7 +116,7 @@ An object that iterates over tiles cut from a given raster.
 - `tilesize`: The size (width and height) of the tiles.
 - `stride`: The horizontal and vertical distance between adjacent tiles.
 """
-struct TileView{D<:HasDims,TS} <: AbstractView{D}
+struct TileView{D<:HasDims,TS} <: AbstractIterator{D}
     data::D
     tiles::Vector{Tuple{Int,Int}}
     tilesize::Int

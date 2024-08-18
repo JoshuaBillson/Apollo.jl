@@ -1,46 +1,88 @@
+"""
+The super type of all loss functions. 
+
+Subtypes need to implement a struct method with the call signature `(ŷ::AbstractArray, y::AbstractArray)`.
+Instances can then be called as either `loss(ŷ, y)` or `loss(model, batch)`, where `batch` should
+be a `Tuple` of the form `(x..., y)`.
+
+# Example Implementation
+```julia
+struct MeanAbsoluteError <: AbstractLoss end
+
+function (l::MeanAbsoluteError)(ŷ::AbstractArray, y::AbstractArray)
+    return mean(abs.(ŷ .- y))
+end
+```
+"""
 abstract type AbstractLoss end
+
+"""
+The super type of all observation-weighted loss functions. 
+
+Subtypes need to implement a struct method with the call signature 
+`(ŷ::AbstractArray, y::AbstractArray, w::AbstractArray)`, where `w` is a mask that assigns an additional
+weight term to each observation. Instances are called as either `loss(ŷ, y, w)` or 
+`loss(model, batch)`, where `batch` should be a `Tuple` of the form `(x..., y, w)`.
+
+# Example Implementation
+```julia
+struct WeightedMeanSquaredError <: WeightedLoss end
+
+function (l::WeightedMeanSquaredError)(ŷ::AbstractArray, y::AbstractArray, weights::AbstractArray)
+    return mean(((ŷ .- y) .^ 2) .* weights)
+end
+```
+"""
 abstract type WeightedLoss <: AbstractLoss end
+
+function (l::AbstractLoss)(m, batch::Tuple)
+    return l(m(batch[1:end-1]...), batch[end])
+end
+
+function (l::WeightedLoss)(m, batch::Tuple)
+    return l(m(batch[1:end-2]...), batch[end-1], batch[end])
+end
 
 struct BinaryCrossEntropy <: AbstractLoss end
 
-function (l::BinaryCrossEntropy)(ŷ, y)
+function (l::BinaryCrossEntropy)(ŷ::AbstractArray, y::AbstractArray)
     return Flux.binarycrossentropy(ŷ, y)
 end
 
 struct WeightedBinaryCrossEntropy <: WeightedLoss end
 
-function (l::WeightedBinaryCrossEntropy)(ŷ, y, weights)
+function (l::WeightedBinaryCrossEntropy)(ŷ::AbstractArray, y::AbstractArray, weights::AbstractArray)
     l = Flux.binarycrossentropy(ŷ, y, agg=identity)
     return mean(l .* weights)
 end
 
 struct MeanAbsoluteError <: AbstractLoss end
 
-function (l::MeanAbsoluteError)(ŷ, y)
+function (l::MeanAbsoluteError)(ŷ::AbstractArray, y::AbstractArray)
     return mean(abs.(ŷ .- y))
 end
 
 struct WeightedMeanAbsoluteError <: WeightedLoss end
 
-function (l::WeightedMeanAbsoluteError)(ŷ, y, weights)
+function (l::WeightedMeanAbsoluteError)(ŷ::AbstractArray, y::AbstractArray, weights::AbstractArray)
     return mean(abs.(ŷ .- y) .* weights)
 end
 
 struct MeanSquaredError <: AbstractLoss end
 
-function (l::MeanSquaredError)(ŷ, y)
+function (l::MeanSquaredError)(ŷ::AbstractArray, y::AbstractArray)
     return mean(((ŷ .- y) .^ 2))
 end
 
 struct WeightedMeanSquaredError <: WeightedLoss end
 
-function (l::WeightedMeanSquaredError)(ŷ, y, weights)
+function (l::WeightedMeanSquaredError)(ŷ::AbstractArray, y::AbstractArray, weights::AbstractArray)
     return mean(((ŷ .- y) .^ 2) .* weights)
 end
 
 struct DiceLoss <: AbstractLoss end
 
-function (l::DiceLoss)(ŷ, y)
+function (l::DiceLoss)(ŷ::AbstractArray, y::AbstractArray)
     Flux.dice_coeff_loss(ŷ, y)
 end
 
@@ -50,13 +92,27 @@ struct MixedLoss{L1<:AbstractLoss,L2<:AbstractLoss,T<:AbstractFloat} <: Abstract
     w::T
 end
 
-(l::MixedLoss)(ŷ, y) = (l.w * l.l1(ŷ, y)) + ((1 - l.w) * l.l2(ŷ, y))
+(l::MixedLoss)(ŷ::AbstractArray, y::AbstractArray) = (l.w * l.l1(ŷ, y)) + ((1 - l.w) * l.l2(ŷ, y))
 
-struct MaskedLoss{L<:AbstractLoss}
+"""
+    MaskedLoss(loss::AbstractLoss)
+
+Modifies a given loss function to only consider observed values, which are denoted by
+a given mask, where `1` indicates that a value was observed and 0 indicates that it was not.
+
+As with `WeightedLoss`, instances can be called as either `loss(ŷ, y, mask)` or `loss(model, batch)`, 
+where `batch` should be a `Tuple` of the form `(x..., y, mask)`.
+"""
+struct MaskedLoss{L<:AbstractLoss} <: WeightedLoss
     loss::L
 end
 
-function (l::MaskedLoss)(ŷ::AbstractArray{T}, y::AbstractArray{T}, mask) where {T}
-    indices = findall(==(1), mask)
-    return isempty(indices) ? T(0.0) : l.loss(ŷ[indices], y[indices])
+function (l::MaskedLoss)(ŷ::AbstractArray, y::AbstractArray, mask::AbstractArray)
+    return l.loss(_select_obs(ŷ, mask), _select_obs(y, mask))
+end
+
+function _select_obs(x::AbstractArray{<:Real,4}, mask::AbstractArray{<:Real,4})
+    flattened = @pipe permutedims(x, (3,1,2,4)) |> reshape(_, (size(x,3), :))
+    indices = @pipe permutedims(mask, (3,1,2,4)) |> reshape(_, (:)) |> findall
+    return flattened[:,indices]
 end

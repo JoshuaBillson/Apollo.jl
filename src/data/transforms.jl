@@ -17,7 +17,7 @@ abstract type RandomTransform <: AbstractTransform end
 An iterator that applied the provided `transform` to each batch in data.
 The transform will modify each element according to the specified `dtype`.
 """
-struct TransformedView{D,DT,T} <: AbstractView{D}
+struct TransformedView{D,DT,T} <: AbstractIterator{D}
     data::D
     dtype::DT
     transform::T
@@ -34,7 +34,7 @@ Base.getindex(x::TransformedView, i::Int) = apply(x.transform, x.dtype, x.data[i
 Apply the transformation `t` to the input `x` with data type `dtype`.
 """
 transform(t::AbstractTransform, dtype, data) = apply(t, dtype, data, rand(1:1000))
-function transform(t::AbstractTransform, dtype, data::AbstractView)
+function transform(t::AbstractTransform, dtype, data::AbstractIterator)
     return TransformedView(data, dtype, t)
 end
 

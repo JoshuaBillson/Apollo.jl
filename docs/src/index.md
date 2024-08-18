@@ -29,7 +29,7 @@ zeros_like
 
 # Data Views
 ```@docs
-AbstractView
+AbstractIterator
 JoinedView
 MappedView
 ObsView
