@@ -97,6 +97,14 @@ update
 update!
 ```
 
+# Losses
+
+```@docs
+AbstractLoss
+MaskedLoss
+WeightedLoss
+```
+
 # Performance Tracking
 ```@docs
 Tracker
