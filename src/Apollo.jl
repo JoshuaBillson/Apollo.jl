@@ -1,7 +1,7 @@
 module Apollo
 
 import Flux, Metalhead, ImageCore, Random, Tables, PrettyTables, MosaicViews
-using Rasters, Match, Statistics
+using Rasters, Match, Statistics, ArchGDAL
 using Pipe: @pipe
 using Accessors: @set
 using DataStructures: OrderedDict
