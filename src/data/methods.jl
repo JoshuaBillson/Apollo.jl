@@ -36,7 +36,8 @@ Restore the raster dimensions given by `dims` to the provided tensor. The final 
 function raster(tensor::AbstractArray{T,N}, dims::Tuple; missingval=0) where {T,N}
     @assert length(dims) == (N - 1) "Tensor dims do not match raster dims"
     @assert size(tensor, N) == 1 "Cannot convert tensors with multiple observations!"
-    return Raster(selectdim(tensor, N, 1), dims, missingval=T(missingval))
+    sorted_dims = Rasters.dims(dims, Rasters.commondims((X,Y,Z,Band,Ti), dims))  # Enforce (X,Y,Z,Band,Ti) Order
+    return Raster(selectdim(tensor, N, 1), sorted_dims, missingval=T(missingval))
 end
 
 """
@@ -48,12 +49,12 @@ Resample `x` according to the given `scale` and `method`.
 # Parameters
 - `x`: The raster/stack to be resampled.
 - `scale`: The size of the output with respect to the input.
-- `method`: One of `:near`, `:bilinear`, `:cubic`, `:cubicspline`, `:lanczos`, or `:average`.
+- `method`: One of `:nearest`, `:bilinear`, `:cubic`, `:cubicspline`, `:lanczos`, or `:average`.
 """
 function resample(x::HasDims, scale, method=:bilinear)
     _check_resample_method(method)
     newsize = round.(Int, (size(x,X), size(x,Y)) .* scale)
-    return Rasters.resample(x, size=newsize, method=method)
+    return Rasters.resample(x, size=newsize, method=method == :nearest ? :near : method)
 end
 
 """
@@ -103,7 +104,7 @@ function crop(x::AbstractArray, size::Tuple{Int,Int}, ul=(1,1))
 end
 
 function _check_resample_method(method)
-    valid_methods = [:near, :bilinear, :cubic, :cubicspline, :lanczos, :average]
+    valid_methods = [:nearest, :bilinear, :cubic, :cubicspline, :lanczos, :average]
     if !(method in valid_methods)
         throw(ArgumentError("`method` must be one of $(join(map(x -> ":$x", valid_methods), ", ", ", or "))!"))
     end

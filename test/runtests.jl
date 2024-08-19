@@ -22,10 +22,23 @@ const rng = StableRNG(123)
     @test size(tensor(r5)) == (128, 128, 3, 9, 1)
     @test size(tensor(r4, r5)) == (128, 128, 3, 9, 2)
     @test size(tensor(r6, r6)) == (256, 256, 1, 2)  # Missing Bands
+    @test size(tensor(Float64, [r1, r1, r2])) == (256, 256, 3, 3)  # Vector of rasters
+    @test size(tensor(RasterStack(r1, layersfrom=Band), layerdim=Band)) == (256, 256, 3, 1)  # RasterStack
     @test_throws DimensionMismatch tensor(r1, r2, r4)  # Extra Dimension
     @test_throws DimensionMismatch tensor(r4, r5, r1)  # Missing Dimension
     @test_throws DimensionMismatch tensor(r1, r2, r6)  # Missing Dimension
     @test_throws DimensionMismatch tensor(r1, r2, r3)  # Mismatched Sizes
+
+    # raster
+    @test all(raster(tensor(r1), dims(r1)) .== r1)  # raster dims match tensor dims
+    @test all(raster(tensor(r2), dims(r2)) .== permutedims(r2, (X,Y,Band)))  # raster dims mismatch tensor dims
+
+    # resample
+    @test size(Apollo.resample(r1, 2.0, :bilinear)) == (512, 512, 3)
+    @test size(Apollo.resample(r1, 0.5, :average)) == (128, 128, 3)
+    @test size(Apollo.resample(r5, 2.0, :bilinear)) == (3, 256, 256, 9)
+    @test size(Apollo.resample(r5, 0.5, :average)) == (3, 64, 64, 9)
+    @test_throws ArgumentError Apollo.resample(r5, 0.5, :foo)
 end
 
 @testset "utilities" begin
