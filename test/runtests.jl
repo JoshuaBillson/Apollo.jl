@@ -157,20 +157,31 @@ end
 end
 
 @testset "classification metrics" begin
-    # Accuracy
+    # Accuracy - Prediction Rounding
     m = Metric(Accuracy())
     update!(m, [0.1, 0.8, 0.51, 0.49], [0, 1, 1, 0])
     @test compute(m) == 1
+
+    # Accuracy - Multi Batch
     reset!(m)
     update!(m, [0.1, 0.6], [0, 1])
     update!(m, [0.7, 0.4], [1, 1])
     @test compute(m) == 0.75
+
+    # Accuracy - Perfectly Incorrect
     reset!(m)
     update!(m, [0, 0, 0, 1], [1, 1, 1, 0])
     @test compute(m) == 0
+
+    # Accuracy - Soft Labels
     reset!(m)
     update!(m, [0.1, 0.1, 0.1, 0.9], [0.95, 0.95, 0.95, 0.05])
     @test compute(m) == 0
+
+    # Accuracy - One Hot Labels
+    reset!(m)
+    update!(m, hcat([0.1, 0.9], [0.8, 0.2], [0.3, 0.7], [0.15, 0.85]), hcat([0, 1], [1, 0], [1, 0], [0, 1]))
+    @test compute(m) == 0.75
 
     # MIoU
 

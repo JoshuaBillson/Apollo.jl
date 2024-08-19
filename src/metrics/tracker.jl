@@ -32,7 +32,7 @@ julia> md = MetricLogger(Accuracy(), MIoU([0,1]); prefix="train_");
 julia> step!(md, [0, 0, 1, 0], [0, 0, 1, 1]);
 
 julia> md
-MetricLogger(train_accuracy=0.75, train_MIoU=0.5833334)
+MetricLogger(train_accuracy=0.75, train_MIoU=0.5833333333333334)
 
 julia> step!(md, [0, 0, 1, 1], [0, 0, 1, 1]);
 
@@ -42,7 +42,7 @@ MetricLogger(train_accuracy=0.875, train_MIoU=0.775)
 julia> reset!(md)
 
 julia> md
-MetricLogger(train_accuracy=0.0, train_MIoU=0.0)
+MetricLogger(train_accuracy=0.0, train_MIoU=1.0)
 ```
 
 # Example 2
