@@ -1,6 +1,4 @@
 """
-Abstract supertype of all metrics.
-
 Metrics are measures of a model's performance, such as loss, accuracy, or squared error.
 
 Each metric must implement the following interface:
@@ -51,6 +49,7 @@ function update end
 
 """
     compute(m::AbstractMetric, state)
+    compute(metric::Metric)
 
 Compute the performance measure from the current state.
 """
@@ -59,7 +58,13 @@ function compute end
 """
     Metric(measure::AbstractMetric)
 
-`Metric` objects are used to store the state for a given `AbstractMetric`.
+`Metric` objects are used to store and maintain the state for a given `AbstractMetric`.
+
+`Metrics` are compatible with the following interface:
+- `name(metric)`: Returns the human readable name of the metric.
+- `update!(metric, ŷ, y)`: Updates the metric's state for the given prediction/label pair.
+- `reset!(metric)`: Restores the metric's state to the initial value.
+- `compute(metric)`: Computes the metric's value for the current state.
 """
 mutable struct Metric{M,T}
     measure::M
@@ -68,9 +73,7 @@ end
 
 Metric(measure::AbstractMetric) = Metric(measure, init(measure))
 
-function name(m::Metric{M}) where {M <: AbstractMetric}
-    return name(m.measure)
-end
+name(::Metric{M}) where {M <: AbstractMetric} = name(M)
 
 """
     update!(metric::Metric, ŷ, y)
@@ -82,14 +85,7 @@ function update!(metric::Metric, ŷ, y)
     return metric
 end
 
-"""
-    compute(metric::Metric)
-
-Compute the metric value for the current state.
-"""
-function compute(metric::Metric)
-    return compute(metric.measure, metric.state)
-end
+compute(metric::Metric) = compute(metric.measure, metric.state)
 
 """
     reset!(metric::Metric)

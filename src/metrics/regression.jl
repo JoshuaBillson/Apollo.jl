@@ -3,6 +3,8 @@ Super type of all regression metrics.
 """
 abstract type RegressionMetric <: AbstractMetric end
 
+update(x::RegressionMetric, state, ŷ::Vector{<:Real}, y::Vector{<:Real}) = update(x, state, reshape(ŷ, (1,:)), reshape(y, (1,:)))
+
 # Loss Tracking
 
 """

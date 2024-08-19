@@ -156,6 +156,27 @@ end
     @test typeof(mapobs(tensor, TileView(tile, 64))[1:4:16]) == Array{Float32, 5}
 end
 
+@testset "classification metrics" begin
+    # Accuracy
+    m = Metric(Accuracy())
+    update!(m, [0.1, 0.8, 0.51, 0.49], [0, 1, 1, 0])
+    @test compute(m) == 1
+    reset!(m)
+    update!(m, [0.1, 0.6], [0, 1])
+    update!(m, [0.7, 0.4], [1, 1])
+    @test compute(m) == 0.75
+    reset!(m)
+    update!(m, [0, 0, 0, 1], [1, 1, 1, 0])
+    @test compute(m) == 0
+    reset!(m)
+    update!(m, [0.1, 0.1, 0.1, 0.9], [0.95, 0.95, 0.95, 0.05])
+    @test compute(m) == 0
+
+    # MIoU
+
+
+end
+
 @testset "models" begin
     # Test Data
     x1 = rand(rng, Float32, 128, 128, 4, 1)

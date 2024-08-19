@@ -34,7 +34,7 @@ export tensor, raster, transform, apply, normalize, denormalize, resample, upsam
 include("metrics/interface.jl")
 include("metrics/classification.jl")
 include("metrics/regression.jl")
-export AbstractMetric, ClassificationMetric, RegressionMetric
+export AbstractMetric, ClassificationMetric, RegressionMetric, Metric
 export MIoU, Accuracy, Loss, MSE
 export name, init, update, update!, reset!, compute, evaluate
 
