@@ -156,7 +156,7 @@ end
     @test typeof(mapobs(tensor, TileView(tile, 64))[1:4:16]) == Array{Float32, 5}
 end
 
-@testset "classification metrics" begin
+@testset "class metrics" begin
     # Accuracy - Prediction Rounding
     m = Metric(Accuracy())
     update!(m, [0.1, 0.8, 0.51, 0.49], [0, 1, 1, 0])
@@ -183,9 +183,66 @@ end
     update!(m, hcat([0.1, 0.9], [0.8, 0.2], [0.3, 0.7], [0.15, 0.85]), hcat([0, 1], [1, 0], [1, 0], [0, 1]))
     @test compute(m) == 0.75
 
-    # MIoU
+    # MIoU - Prediction Rounding
+    m = Metric(MIoU([0,1]))
+    update!(m, [0.1, 0.8, 0.51, 0.49], [0, 1, 1, 0])
+    @test compute(m) == 1
 
+    # MIoU - Multi Batch
+    reset!(m)
+    update!(m, [0.1, 0.6], [0, 1])
+    update!(m, [0.7, 0.4], [1, 1])
+    @test compute(m) ≈ 0.5833333333333333
 
+    # MIoU - Perfectly Incorrect
+    reset!(m)
+    update!(m, [0, 0, 0, 1], [1, 1, 1, 0])
+    @test compute(m) ≈ 0 atol=1e-12
+
+    # MIoU - Soft Labels
+    reset!(m)
+    update!(m, [0.1, 0.9, 0.7, 0.4], [0.05, 0.95, 0.95, 0.95])
+    @test compute(m) ≈ 0.5833333333333333
+
+    # MIoU - No Positive Labels
+    reset!(m)
+    update!(m, [0, 0, 0, 0], [0, 0, 0, 0])
+    @test compute(m) == 1.0
+
+    # Accuracy - One Hot Labels
+    m = Metric(MIoU([1,2]))
+    update!(m, hcat([0.9, 0.1], [0.2, 0.8], [0.3, 0.7], [0.85, 0.15]), hcat([1, 0], [0, 1], [0, 1], [0, 1]))
+    @test compute(m) ≈ 0.5833333333333333
+end
+
+@testset "tracker" begin
+    # Initialize Tracker
+    tracker = Tracker("train_acc" => Accuracy(), "test_acc" => Accuracy())
+
+    # Update Metrics Matching Regex
+    step!(tracker, r"train_", [0.1, 0.8], [0, 1])
+    @test scores(tracker) == (epoch=1, train_acc=1.0, test_acc=0.0)
+
+    # Update Metrics Matching Name
+    step!(tracker, "test_acc", [0.6, 0.51], [1, 0])
+    @test scores(tracker) == (epoch=1, train_acc=1.0, test_acc=0.5)
+
+    # End Epoch
+    epoch!(tracker)
+    @test scores(tracker) == (epoch=2, train_acc=0.0, test_acc=0.0)
+
+    # Update All Metrics
+    step!(tracker, [0, 1, 1, 0], [0, 1, 1, 1])
+    @test scores(tracker) == (epoch=2, train_acc=0.75, test_acc=0.75)
+
+    # Find Best Epoch
+    @test best_epoch(tracker, Max("test_acc")) == 1
+    epoch!(tracker)
+    @test best_epoch(tracker, Max("test_acc")) == 2
+    @test best_epoch(tracker, Min("test_acc")) == 1
+
+    # Test Score Printing
+    @test printscores(tracker, epoch=1) == "epoch: 1  train_acc: 1.0  test_acc: 0.5"
 end
 
 @testset "models" begin
