@@ -1,6 +1,7 @@
 using Apollo
 using Test
 using Rasters
+using Statistics
 using ArchGDAL
 using Random
 using StableRNGs
@@ -42,6 +43,17 @@ const rng = StableRNG(123)
     # raster
     @test all(raster(tensor(r1), dims(r1)) .== r1)  # raster dims match tensor dims
     @test all(raster(tensor(r2), dims(r2)) .== permutedims(r2, (X,Y,Band)))  # raster dims mismatch tensor dims
+
+    # normalize
+    μ = folddims(mean, Float64.(r1))
+    σ = folddims(std, Float64.(r1))
+    t = Normalize(μ, σ)
+    @test all(isapprox.(mean(apply(t, Image(), r1, 123).data, dims=(1,2)), 0, atol=1e-3))  # image mean is 0
+    @test all(isapprox.(std(apply(t, Image(), r1, 123).data, dims=(1,2)), 1, atol=1e-3))  # image std is 1
+    @test all(isapprox.(mean(apply(t, Mask(), r1, 123).data, dims=(1,2)), 0.5, atol=0.1))  # mask mean is unchanged
+    @test all(isapprox.(std(apply(t, Mask(), r1, 123).data, dims=(1,2)), 0.28, atol=0.1))  # mask std is unchanged
+    @test all(isapprox.(mean(apply(t, Image(), tensor(r1), 123), dims=(1,2)), 0, atol=1e-3))  # tensor mean is 0
+    @test all(isapprox.(std(apply(t, Image(), tensor(r1), 123), dims=(1,2)), 1, atol=1e-3))  # tensor std is 1
 
     # resample
     @test size(Apollo.resample(r1, 2.0, :bilinear)) == (512, 512, 3)
