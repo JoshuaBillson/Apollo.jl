@@ -30,6 +30,15 @@ const rng = StableRNG(123)
     @test_throws DimensionMismatch tensor(r1, r2, r6)  # Missing Dimension
     @test_throws DimensionMismatch tensor(r1, r2, r3)  # Mismatched Sizes
 
+    # Tensor transform
+    @test size.(apply(Tensor(), (Image(), Image()), (r1, r5), 123)) == ((256, 256, 3, 1), (128, 128, 3, 9, 1))
+    @test size(apply(Tensor(), Image(), r6, 123)) == (256, 256, 1, 1)
+    @test size(apply(Tensor(), Mask(), r6, 123)) == (256, 256, 1, 1)
+    @test size(apply(Tensor(), Image(), RasterStack(r1, layersfrom=Band), 123)) == (256, 256, 3, 1)
+    @test size(apply(Tensor(layerdim=Ti), Image(), RasterStack(r5, layersfrom=Ti), 123)) == (128, 128, 3, 9, 1)
+    @test size(apply(Tensor(layerdim=Band), Image(), RasterStack(r5, layersfrom=Ti), 123)) == (128, 128, 27, 1)
+    @test eltype(apply(Tensor(precision=Float16), Image(), r6, 123)) == Float16
+
     # raster
     @test all(raster(tensor(r1), dims(r1)) .== r1)  # raster dims match tensor dims
     @test all(raster(tensor(r2), dims(r2)) .== permutedims(r2, (X,Y,Band)))  # raster dims mismatch tensor dims
