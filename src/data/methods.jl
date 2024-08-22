@@ -41,6 +41,52 @@ function raster(tensor::AbstractArray{T,N}, dims::Tuple; missingval=0) where {T,
 end
 
 """
+    normalize(x::AbstractArray, μ::AbstractVector, σ::AbstractVector; dim=3)
+
+Normalize the input array with respect to the specified dimension so that the mean is 0
+and the standard deviation is 1.
+
+# Parameters
+- `μ`: A `Vector` of means for each index in `dim`.
+- `σ`: A `Vector` of standard deviations for each index in `dim`.
+- `dim`: The dimension along which to normalize the input array.
+"""
+function normalize(x::AbstractArray{<:Real}, μ::AbstractArray{<:Real}, σ::AbstractArray{<:Real}; dim=3)
+    return _normalize(x, μ, σ, dim)
+end
+
+_normalize(x::AbstractRaster, μ, σ, dim::Rasters.Dimension) = _normalize(x, μ, σ, Rasters.dimnum(x, dim))
+_normalize(x::AbstractRaster, μ, σ, dim::Int) = Rasters.modify(x -> _normalize(x, μ, σ, dim), x)
+function _normalize(x::AbstractArray, μ, σ, dim::Int)
+    μ = vec2array(μ, x, dim)
+    σ = vec2array(σ, x, dim)
+    return (x .- μ) ./ σ
+end
+
+"""
+    denormalize(x::AbstractArray, μ::AbstractVector, σ::AbstractVector; dim=3)
+
+Denormalize the input array with respect to the specified dimension. Reverses the
+effect of `normalize`.
+
+# Parameters
+- `μ`: A `Vector` of means for each index in `dim`.
+- `σ`: A `Vector` of standard deviations for each index in `dim`.
+- `dim`: The dimension along which to denormalize the input array.
+"""
+function denormalize(x::AbstractArray{<:Real}, μ::AbstractArray{<:Real}, σ::AbstractArray{<:Real}; dim=3)
+    return _denormalize(x, μ, σ, dim)
+end
+
+_denormalize(x::AbstractRaster, μ, σ, dim::Rasters.Dimension) = _denormalize(x, μ, σ, Rasters.dimnum(x, dim))
+_denormalize(x::AbstractRaster, μ, σ, dim::Int) = Rasters.modify(x -> _denormalize(x, μ, σ, dim), x)
+function _denormalize(x::AbstractArray, μ, σ, dim::Int)
+    μ = vec2array(μ, x, dim)
+    σ = vec2array(σ, x, dim)
+    return (x .* σ) .+ μ
+end
+
+"""
     resample(x::AbstractRaster, scale::AbstractFloat, method=:bilinear)
     resample(x::AbstractRasterStack, scale::AbstractFloat, method=:bilinear)
 

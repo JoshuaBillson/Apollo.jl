@@ -55,6 +55,12 @@ const rng = StableRNG(123)
     @test all(isapprox.(mean(apply(t, Image(), tensor(r1), 123), dims=(1,2)), 0, atol=1e-3))  # tensor mean is 0
     @test all(isapprox.(std(apply(t, Image(), tensor(r1), 123), dims=(1,2)), 1, atol=1e-3))  # tensor std is 1
 
+    # denormalize
+    t2 = DeNormalize(μ, σ)
+    normalized = apply(t, Image(), Float64.(r1), 123) 
+    denormalized = apply(t2, Image(), normalized, 123)
+    @test all(denormalized .≈ r1)
+
     # resample
     @test size(Apollo.resample(r1, 2.0, :bilinear)) == (512, 512, 3)
     @test size(Apollo.resample(r1, 0.5, :average)) == (128, 128, 3)
