@@ -97,11 +97,17 @@ Resample `x` according to the given `scale` and `method`.
 - `scale`: The size of the output with respect to the input.
 - `method`: One of `:nearest`, `:bilinear`, `:cubic`, `:cubicspline`, `:lanczos`, or `:average`.
 """
+resample(x::AbstractArray, args...) = Apollo.resample(_array_to_raster(x), args...).data
 function resample(x::HasDims, scale, method=:bilinear)
+    (scale <= 0) && throw(ArgumentError("scale must be strictly greater than zero (received $scale)."))
     _check_resample_method(method)
     newsize = round.(Int, (size(x,X), size(x,Y)) .* scale)
     return Rasters.resample(x, size=newsize, method=method == :nearest ? :near : method)
 end
+
+_array_to_raster(x::AbstractArray{<:Any,4}) = Rasters.Raster(x, (X,Y,Band,Dim{:obs}))
+_array_to_raster(x::AbstractArray{<:Any,5}) = Rasters.Raster(x, (X,Y,Band,Ti,Dim{:obs}))
+_array_to_raster(x::AbstractArray{<:Any,6}) = Rasters.Raster(x, (X,Y,Z,Band,Ti,Dim{:obs}))
 
 """
     upsample(x::AbstractArray, scale, method=:bilinear)

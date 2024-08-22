@@ -66,7 +66,20 @@ const rng = StableRNG(123)
     @test size(Apollo.resample(r1, 0.5, :average)) == (128, 128, 3)
     @test size(Apollo.resample(r5, 2.0, :bilinear)) == (3, 256, 256, 9)
     @test size(Apollo.resample(r5, 0.5, :average)) == (3, 64, 64, 9)
+    @test size(Apollo.resample(tensor(r5), 0.5, :average)) == (64, 64, 3, 9, 1)
     @test_throws ArgumentError Apollo.resample(r5, 0.5, :foo)
+    @test_throws ArgumentError Apollo.resample(r5, 0, :average)
+    @test_throws ArgumentError Apollo.resample(r5, -1, :average)
+
+    # Resample transform
+    vals = Set(r1.data)
+    @test size(apply(Resample(2.0), Image(), r1, 123)) == (512, 512, 3)
+    @test size(apply(Resample(1.5), Image(), r1, 123)) == (384, 384, 3)
+    @test size(apply(Resample(0.5), Image(), r1, 123)) == (128, 128, 3)
+    @test size(apply(Resample(0.5), Image(), r5, 123)) == (3, 64, 64, 9)
+    @test size(apply(Resample(2.0), Image(), tensor(r5), 123)) == (256, 256, 3, 9, 1)
+    @test all(x -> x in vals, apply(Resample(2), Mask(), r1, 123))
+    @test_throws ArgumentError Resample(0)
 
     # upsample
     @test size(Apollo.upsample(tensor(r1), 2, :bilinear)) == (512, 512, 3, 1) # bilinear
@@ -103,6 +116,25 @@ const rng = StableRNG(123)
     @test_throws ArgumentError Apollo.crop(r5, -1)  # negative tilesize
     @test_throws MethodError Apollo.crop(r5, 2.5)  # float tilesize
     @test_throws ArgumentError Apollo.crop(r5, 128, (-1, -1))  # negative ul
+
+    # Crop transform
+    @test size(apply(Crop(128), Image(), r1, 123)) == (128, 128, 3)
+    @test size(apply(Crop(32), Mask(), r5, 123)) == (3, 32, 32, 9)
+    @test size(apply(Crop(32), Mask(), tensor(r5), 123)) == (32, 32, 3, 9, 1)
+
+    # RandomCrop transform
+    @test size(apply(RandomCrop(128), Image(), r1, 123)) == (128, 128, 3)
+    @test size(apply(RandomCrop(32), Mask(), r5, 123)) == (3, 32, 32, 9)
+    @test size(apply(RandomCrop(32), Image(), tensor(r5), 123)) == (32, 32, 3, 9, 1)
+    @test apply(RandomCrop(32), Image(), r1, 123) != Apollo.crop(r1, 32)
+
+    # ComposedTransform
+    t = Tensor() |> Normalize(μ, σ) |> Crop(128)
+    transformed = apply(t, Image(), r1, 123)
+    @test all(x -> isapprox(x, 0, atol=0.05), mean(transformed, dims=(1,2,4)))
+    @test all(x -> isapprox(x, 1, atol=0.05), std(transformed, dims=(1,2,4)))
+    @test size(transformed) == (128, 128, 3, 1)
+    @test transformed isa Array{Float32,4}
 end
 
 @testset "utilities" begin

@@ -146,10 +146,13 @@ struct Resample <: AbstractTransform
     scale::Float64
 end
 
-Resample(scale::Number) = Resample(Float64(scale))
+function Resample(scale::Number)
+    (scale <= 0) && throw(ArgumentError("scale must be strictly greater than zero (received $scale)."))
+    Resample(Float64(scale))
+end
 
-apply(t::Resample, ::Mask, x::HasDims, ::Int) = resample(x, t.scale, :near)
-function apply(t::Resample, ::Image, x::HasDims, ::Int)
+apply(t::Resample, ::Mask, x, ::Int) = resample(x, t.scale, :nearest)
+function apply(t::Resample, ::Image, x, ::Int)
     return t.scale > 1 ? resample(x, t.scale, :bilinear) : resample(x, t.scale, :average)
 end
 
