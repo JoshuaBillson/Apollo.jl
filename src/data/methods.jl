@@ -60,47 +60,76 @@ end
 """
     upsample(x::AbstractArray, scale, method=:bilinear)
 
-Upsample the array `x` according to the given `scale` and `method`.
+Upsample the array `x` according to the given `scale` and `method`. This function
+is specialized for tensors, and will generally be much faster than `resample`.
 
 # Parameters
 - `x`: The array to be upsampled.
-- `scale`: The size of the output with respect to the input.
-- `method`: One of `:linear`, `:bilinear`, `:trilinear`, or `:nearest`.
+- `scale`: A positive `Integer` specifying the size of the output with respect to the input.
+- `method`: One of `:bilinear` or `:nearest`.
 """
-function upsample(x::AbstractArray, scale, method=:bilinear)
-    @match method begin
-        :linear => Flux.upsample_linear(x, scale)
-        :bilinear => Flux.upsample_bilinear(x, scale)
-        :trilinear => Flux.upsample_trilinear(x, scale)
-        :nearest => Flux.upsample_nearest(x, scale)
-        _ => throw(ArgumentError("`method` must be one of :linear, :bilinear, :trilinear, or :nearest!"))
+upsample(::HasDims, args...) = throw(ArgumentError("upsample can only be called on tensors!"))
+upsample(x::AbstractArray{<:Real}, scale, args...) = upsample(x, _scale(x, scale), args...)
+function upsample(x::AbstractArray{<:Real,N}, scale::NTuple{S,<:Real}, method=:bilinear) where {N,S}
+    @assert all(>=(1), scale) && all(x -> x isa Integer, scale) "Scale must be a positive non-zero integer!"
+    if (N - 2) != S 
+        throw(ArgumentError("The scale argument should be an NTuple with length $(N-2), but it has length $S."))
+    else
+        @match method begin
+            :bilinear => Flux.upsample_bilinear(x, scale)
+            :nearest => Flux.upsample_nearest(x, scale)
+            _ => throw(ArgumentError("`method` must be one of :bilinear or :nearest!"))
+        end
     end
 end
 
+_scale(::AbstractArray{<:Any,4}, scale::T) where {T <: Real} = (scale, scale)
+_scale(::AbstractArray{<:Any,5}, scale::T) where {T <: Real} = (scale, scale, T(1))
+_scale(::AbstractArray{<:Any,6}, scale::T) where {T <: Real} = (scale, scale, T(1), T(1))
+
 """
-    resize(x::AbstractRaster, newsize, method=:bilinear)
-    resize(x::AbstractRasterStack, newsize, method=:bilinear)
+    resize(x::AbstractRaster, newsize::Tuple{Int,Int}, method=:bilinear)
+    resize(x::AbstractRasterStack, newsize::Tuple{Int,Int}, method=:bilinear)
 
 Resize the raster/stack `x` to `newsize` under the specified `method`.
 
 # Parameters
 - `x`: The array to be resized.
 - `newsize`: The width and height of the output as a tuple.
-- `method`: One of `:near`, `:bilinear`, `:cubic`, `:cubicspline`, `:lanczos`, or `:average`.
+- `method`: One of `:nearest`, `:bilinear`, `:cubic`, `:cubicspline`, `:lanczos`, or `:average`.
 """
-function resize(x::HasDims, newsize, method=:bilinear)
+function resize(x::HasDims, newsize::Tuple{Int,Int}, method=:bilinear)
     _check_resample_method(method)
     return Rasters.resample(x, size=newsize, method=method)
 end
 
 """
-    crop(x::AbstractArray, size, ul=(1,1))
+    crop(x, size::Int, ul=(1,1))
+    crop(x, size::Tuple{Int,Int}, ul=(1,1))
 
 Crop a tile equal to `size` out of `x` with an upper-left corner defined by `ul`.
 """
-crop(x::AbstractArray, size::Int, ul=(1,1)) = crop(x, (size, size), ul)
-function crop(x::AbstractArray, size::Tuple{Int,Int}, ul=(1,1))
-    return _crop(x, ul[1]:ul[1]+size[1]-1, ul[2]:ul[2]+size[2]-1)
+crop(x, size::Int, ul=(1,1)) = crop(x, (size, size), ul)
+crop(x::HasDims, size::Tuple{Int,Int}, ul=(1,1)) = _tile(x, ul, size)
+crop(x::AbstractArray, size::Tuple{Int,Int}, ul=(1,1)) = _tile(x, ul, size)
+
+_crop(x::AbstractArray{<:Any,2}, xdims, ydims) = x[xdims,ydims]
+_crop(x::AbstractArray{<:Any,3}, xdims, ydims) = x[xdims,ydims,:]
+_crop(x::AbstractArray{<:Any,4}, xdims, ydims) = x[xdims,ydims,:,:]
+_crop(x::AbstractArray{<:Any,5}, xdims, ydims) = x[xdims,ydims,:,:,:]
+_crop(x::AbstractArray{<:Any,6}, xdims, ydims) = x[xdims,ydims,:,:,:,:]
+_crop(x::HasDims, xdims, ydims) = x[X(xdims), Y(ydims)]
+
+function _tile(x, ul::Tuple{Int,Int}, tilesize::Tuple{Int,Int})
+    # Compute Lower-Right Coordinates
+    lr = ul .+ tilesize .- 1
+
+    # Check Bounds
+    any(tilesize .< 1) && throw(ArgumentError("Tile size must be positive!"))
+    (any(ul .< 1) || any(lr .> _tilesize(x))) && throw(ArgumentError("Tile is out of bounds!"))
+
+    # Crop Tile
+    return _crop(x, ul[1]:lr[1], ul[2]:lr[2])
 end
 
 function _check_resample_method(method)

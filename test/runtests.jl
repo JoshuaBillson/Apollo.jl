@@ -1,12 +1,13 @@
 using Apollo
 using Test
 using Rasters
+using ArchGDAL
 using Random
 using StableRNGs
 
 const rng = StableRNG(123)
 
-@testset "tensor" begin
+@testset "transforms" begin
     # Test Data
     r1 = Raster(rand(rng, Float32, 256, 256, 3), (X, Y, Band))
     r2 = Raster(rand(rng, Float32, 3, 256, 256), (Band, X, Y))
@@ -39,6 +40,42 @@ const rng = StableRNG(123)
     @test size(Apollo.resample(r5, 2.0, :bilinear)) == (3, 256, 256, 9)
     @test size(Apollo.resample(r5, 0.5, :average)) == (3, 64, 64, 9)
     @test_throws ArgumentError Apollo.resample(r5, 0.5, :foo)
+
+    # upsample
+    @test size(Apollo.upsample(tensor(r1), 2, :bilinear)) == (512, 512, 3, 1) # bilinear
+    @test size(Apollo.upsample(tensor(r1), 2, :nearest)) == (512, 512, 3, 1)  # nearest
+    @test size(Apollo.upsample(tensor(r5), 2, :bilinear)) == (256, 256, 3, 9, 1)  # temporal dimension
+    @test_throws ArgumentError Apollo.upsample(tensor(r5), 2, :foo)  # invalid method
+    @test_throws AssertionError Apollo.upsample(tensor(r5), 0.5, :bilinear)  # invalid scale
+    @test_throws ArgumentError Apollo.upsample(r5, 2, :bilinear)  # invalid type
+
+    # resize
+    @test size(Apollo.resize(r1, (512, 512), :bilinear)) == (512, 512, 3) # bilinear
+    @test size(Apollo.resize(r1, (128, 128), :average)) == (128, 128, 3)  # average
+    @test size(Apollo.resize(r1, (128, 512), :nearest)) == (128, 512, 3)  # difference scales per dimension
+    @test size(Apollo.resize(r5, (256, 256), :bilinear)) == (3, 256, 256, 9)  # temporal dimension
+    @test_throws ArchGDAL.GDAL.GDALError Apollo.resize(r5, (-256, 256), :bilinear)  # Invalid size
+    @test_throws ArgumentError Apollo.resize(r5, (256, 256), :foo)  # invalid method
+
+    # crop
+    @test size(Apollo.crop(r1, 128)) == (128, 128, 3)  # crop at (1,1) (size)
+    @test all(Apollo.crop(r1, 128) .== r1[X(1:128), Y(1:128)])  # crop at (1,1) (values)
+    @test size(Apollo.crop(r1, 128, (129,129))) == (128, 128, 3)  # crop at (129,129) (size)
+    @test all(Apollo.crop(r1, 128, (129,129)) .== r1[X(129:256), Y(129:256)])  # crop at (129,129) (values)
+    @test size(Apollo.crop(r5, 64, (65,65))) == (3, 64, 64, 9)  # dims out of order (size)
+    @test all(Apollo.crop(r5, 64, (65,65)) .== r5[X(65:128), Y(65:128)])  # dims out of order (values)
+    @test size(Apollo.crop(tensor(r5), 64, (65,65))) == (64, 64, 3, 9, 1)  # tensor (size)
+    @test all(Apollo.crop(tensor(r5), 64, (65,65)) .== tensor(r5)[65:128, 65:128, :, :, :])  # tensor (values)
+    @test size(Apollo.crop(RasterStack(r5, layersfrom=Band), 64, (65,65))) == (64, 64, 9)  # stack (size)
+    @test all(Apollo.crop(RasterStack(r5, layersfrom=Band), 64, (65,65))[:Band_1] .== r5[X(65:128), Y(65:128), Band(1)])  # stack (values)
+    @test_throws ArgumentError Apollo.crop(r5, 64, (66,65))  # Out of Bounds (raster)
+    @test_throws ArgumentError Apollo.crop(tensor(r5), 64, (66,65))  # Out of Bounds (tensor)
+    @test_throws ArgumentError Apollo.crop(r5, 129)  # tile too large (raster)
+    @test_throws ArgumentError Apollo.crop(tensor(r5), 129)  # tile too large (tensor)
+    @test_throws ArgumentError Apollo.crop(r5, 0)  # zero tilesize
+    @test_throws ArgumentError Apollo.crop(r5, -1)  # negative tilesize
+    @test_throws MethodError Apollo.crop(r5, 2.5)  # float tilesize
+    @test_throws ArgumentError Apollo.crop(r5, 128, (-1, -1))  # negative ul
 end
 
 @testset "utilities" begin

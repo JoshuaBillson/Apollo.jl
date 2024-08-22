@@ -198,25 +198,6 @@ unzip(x::AbstractVector{<:Tuple}) = map(f -> getfield.(x, f), fieldnames(eltype(
 _all_equal(f, xs) = map(f, xs) |> _all_equal
 _all_equal(xs) = all(==(first(xs)), xs)
 
-_crop(x::AbstractArray{<:Any,2}, xdims, ydims) = x[xdims,ydims]
-_crop(x::AbstractArray{<:Any,3}, xdims, ydims) = x[xdims,ydims,:]
-_crop(x::AbstractArray{<:Any,4}, xdims, ydims) = x[xdims,ydims,:,:]
-_crop(x::AbstractArray{<:Any,5}, xdims, ydims) = x[xdims,ydims,:,:,:]
-_crop(x::AbstractArray{<:Any,6}, xdims, ydims) = x[xdims,ydims,:,:,:,:]
-_crop(x::HasDims, xdims, ydims) = x[X(xdims), Y(ydims)]
-
-function _tile(x::AbstractArray, ul::Tuple{Int,Int}, tilesize::Tuple{Int,Int})
-    # Compute Lower-Right Coordinates
-    lr = ul .+ tilesize .- 1
-
-    # Check Bounds
-    any(tilesize .< 1) && throw(ArgumentError("Tile size must be positive!"))
-    (any(ul .< 1) || any(lr .> _tilesize(x))) && throw(ArgumentError("Tile is out of bounds!"))
-
-    # Crop Tile
-    return _crop(x, ul[1]:lr[1], ul[2]:lr[2])
-end
-
 _tilesize(x::HasDims) = size.(Ref(x), (X,Y))
 _tilesize(x::AbstractArray) = size(x)[1:2]
 
