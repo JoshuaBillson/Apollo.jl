@@ -162,17 +162,16 @@ end
 Crop a tile equal to `size` out of `x` with an upper-left corner defined by `ul`.
 """
 crop(x, size::Int, ul=(1,1)) = crop(x, (size, size), ul)
-crop(x::HasDims, size::Tuple{Int,Int}, ul=(1,1)) = _tile(x, ul, size)
-crop(x::AbstractArray, size::Tuple{Int,Int}, ul=(1,1)) = _tile(x, ul, size)
+crop(x::HasDims, size::Tuple{Int,Int}, ul=(1,1)) = _crop(x, ul, size)
+crop(x::AbstractArray, size::Tuple{Int,Int}, ul=(1,1)) = _crop(x, ul, size)
 
-_crop(x::AbstractArray{<:Any,2}, xdims, ydims) = x[xdims,ydims]
-_crop(x::AbstractArray{<:Any,3}, xdims, ydims) = x[xdims,ydims,:]
-_crop(x::AbstractArray{<:Any,4}, xdims, ydims) = x[xdims,ydims,:,:]
-_crop(x::AbstractArray{<:Any,5}, xdims, ydims) = x[xdims,ydims,:,:,:]
-_crop(x::AbstractArray{<:Any,6}, xdims, ydims) = x[xdims,ydims,:,:,:,:]
-_crop(x::HasDims, xdims, ydims) = x[X(xdims), Y(ydims)]
-
-function _tile(x, ul::Tuple{Int,Int}, tilesize::Tuple{Int,Int})
+_crop(x::AbstractArray{<:Any,2}, xdims::AbstractVector, ydims::AbstractVector) = x[xdims,ydims]
+_crop(x::AbstractArray{<:Any,3}, xdims::AbstractVector, ydims::AbstractVector) = x[xdims,ydims,:]
+_crop(x::AbstractArray{<:Any,4}, xdims::AbstractVector, ydims::AbstractVector) = x[xdims,ydims,:,:]
+_crop(x::AbstractArray{<:Any,5}, xdims::AbstractVector, ydims::AbstractVector) = x[xdims,ydims,:,:,:]
+_crop(x::AbstractArray{<:Any,6}, xdims::AbstractVector, ydims::AbstractVector) = x[xdims,ydims,:,:,:,:]
+_crop(x::HasDims, xdims::AbstractVector, ydims::AbstractVector) = x[X(xdims), Y(ydims)]
+function _crop(x, ul::Tuple{Int,Int}, tilesize::Tuple{Int,Int})
     # Compute Lower-Right Coordinates
     lr = ul .+ tilesize .- 1
 
@@ -182,6 +181,44 @@ function _tile(x, ul::Tuple{Int,Int}, tilesize::Tuple{Int,Int})
 
     # Crop Tile
     return _crop(x, ul[1]:lr[1], ul[2]:lr[2])
+end
+
+"""
+    flipX(x)
+
+Flip the image `x` across the horizontal axis.
+"""
+flipX(x::HasDims) = x[Y(size(x,Y):-1:1)]
+flipX(x::AbstractArray{T,2}) where {T} = x[:,end:-1:1]
+flipX(x::AbstractArray{T,3}) where {T} = x[:,end:-1:1,:]
+flipX(x::AbstractArray{T,4}) where {T} = x[:,end:-1:1,:,:]
+flipX(x::AbstractArray{T,5}) where {T} = x[:,end:-1:1,:,:,:]
+flipX(x::AbstractArray{T,6}) where {T} = x[:,end:-1:1,:,:,:,:]
+
+"""
+    flipY(x)
+
+Flip the image `x` across the vertical axis.
+"""
+flipY(x::HasDims) = x[X(size(x,X):-1:1)]
+flipY(x::AbstractArray{T,2}) where {T} = x[end:-1:1,:]
+flipY(x::AbstractArray{T,3}) where {T} = x[end:-1:1,:,:]
+flipY(x::AbstractArray{T,4}) where {T} = x[end:-1:1,:,:,:]
+flipY(x::AbstractArray{T,5}) where {T} = x[end:-1:1,:,:,:,:]
+flipY(x::AbstractArray{T,6}) where {T} = x[end:-1:1,:,:,:,:,:]
+
+"""
+    rot90(x)
+
+Rotate the image `x` by 90 degress. 
+
+**Note:** `x` must be a square image.
+"""
+rot90(x::AbstractRasterStack) = map(rot90, x)
+rot90(x::AbstractRaster) = Rasters.modify(a -> rot90(a, dims=(dimnum(x,X),dimnum(x,Y))), x)
+function rot90(x::AbstractArray; dims=(1,2))
+    @assert size(x, dims[1]) == size(x, dims[2]) "rot90 only works for square tiles!"
+    return mapslices(rotr90, x, dims=dims)
 end
 
 function _check_resample_method(method)

@@ -26,8 +26,8 @@ export splitobs, zipobs, repeatobs, takeobs, dropobs, filterobs, mapobs, sampleo
 include("data/methods.jl")
 include("data/transforms.jl")
 export DType, Image, Mask, AbstractTransform
-export Tensor, Normalize, DeNormalize, Resample, Crop, RandomCrop, FilteredTransform, ComposedTransform
-export tensor, raster, transform, apply, normalize, denormalize, resample, upsample, resize, crop
+export Tensor, Normalize, DeNormalize, Resample, Crop, RandomCrop, FlipX, FlipY, Rot90, FilteredTransform, ComposedTransform
+export tensor, raster, transform, apply, normalize, denormalize, resample, upsample, resize, crop, flipX, flipY, rot90
 
 # Metrics
 include("metrics/interface.jl")

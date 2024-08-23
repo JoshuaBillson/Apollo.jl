@@ -202,6 +202,69 @@ end
 
 description(x::RandomCrop) = "Random crop to $(first(x.size))x$(last(x.size))."
 
+# FlipX
+
+"""
+    FlipX(p)
+
+Apply a random horizontal flip with probability `p`.
+"""
+struct FlipX <: AbstractTransform
+    p::Float64
+
+    FlipX(p::Real) = FlipX(Float64(p))
+    function FlipX(p::Float64)
+        (0 <= p <= 1) || throw(ArgumentError("p must be between 0 and 1!"))
+        return new(p)
+    end
+end
+
+apply(t::FlipX, ::DType, x, seed::Int) = _apply_random(seed, t.p) ? flipX(x) : x
+
+description(x::FlipX) = "Random horizontal flip with probability $(round(x.p, digits=2))."
+
+# FlipY
+
+"""
+    FlipY(p)
+
+Apply a random vertical flip with probability `p`.
+"""
+struct FlipY <: AbstractTransform
+    p::Float64
+
+    FlipY(p::Real) = FlipY(Float64(p))
+    function FlipY(p::Float64)
+        (0 <= p <= 1) || throw(ArgumentError("p must be between 0 and 1!"))
+        return new(p)
+    end
+end
+
+apply(t::FlipY, ::DType, x, seed::Int) = _apply_random(seed, t.p) ? flipY(x) : x
+
+description(x::FlipY) = "Random vertical flip with probability $(round(x.p, digits=2))."
+
+# Rot90
+
+"""
+    Rot90(p)
+
+Apply a random 90 degree rotation with probability `p`.
+"""
+struct Rot90 <: AbstractTransform
+    p::Float64
+
+    Rot90(p::Real) = Rot90(Float64(p))
+    function Rot90(p::Float64)
+        (0 <= p <= 1) || throw(ArgumentError("p must be between 0 and 1!"))
+        return new(p)
+    end
+end
+
+apply(t::Rot90, ::DType, x, seed::Int) = _apply_random(seed, t.p) ? rot90(x) : x
+
+description(x::Rot90) = "Random 90 degree rotation with probability $(round(x.p, digits=2))."
+
 # Filtered Transform
 
 """
@@ -284,3 +347,9 @@ end
 (|>)(a::ComposedTransform, b::AbstractTransform) = ComposedTransform(a.transforms..., b)
 (|>)(a::AbstractTransform, b::ComposedTransform) = ComposedTransform(a, b.transforms...)
 (|>)(a::ComposedTransform, b::ComposedTransform) = ComposedTransform(a.transforms..., b.transforms...)
+
+function _apply_random(seed::Int, p::Float64)
+    @assert 0 <= p <= 1 "p must be between 0 and 1!"
+    outcome = rand(Random.MersenneTwister(seed), Random.uniform(Float64))
+    return outcome <= p
+end

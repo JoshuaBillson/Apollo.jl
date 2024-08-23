@@ -122,11 +122,47 @@ const rng = StableRNG(123)
     @test size(apply(Crop(32), Mask(), r5, 123)) == (3, 32, 32, 9)
     @test size(apply(Crop(32), Mask(), tensor(r5), 123)) == (32, 32, 3, 9, 1)
 
+    # Test Random Outcome
+    @test isapprox(sum([Apollo._apply_random(rand(1:1000000), 0.3) for _ in 1:10000]) / 10000, 0.3, atol=0.02)
+
     # RandomCrop transform
     @test size(apply(RandomCrop(128), Image(), r1, 123)) == (128, 128, 3)
     @test size(apply(RandomCrop(32), Mask(), r5, 123)) == (3, 32, 32, 9)
     @test size(apply(RandomCrop(32), Image(), tensor(r5), 123)) == (32, 32, 3, 9, 1)
     @test apply(RandomCrop(32), Image(), r1, 123) != Apollo.crop(r1, 32)
+
+    # flipX
+    @test catlayers(Apollo.flipX(RasterStack(r1, layersfrom=Band)), Band) == Apollo.flipX(r1)  # stack
+    @test Apollo.flipX(tensor(r1)) == tensor(Apollo.flipX(r1))  # tensor
+    @test tensor(apply(FlipX(1), Image(), r1, 123)) == apply(FlipX(1), Image(), tensor(r1), 123)
+    @test size(apply(FlipX(0), Image(), r1, 123)) == (256, 256, 3)
+    @test size(apply(FlipX(0), Image(), r5, 123)) == (3, 128, 128, 9)
+    @test apply(FlipX(1), Image(), r1, 123) == flipX(r1)
+    @test apply(FlipX(0), Image(), r1, 123) == r1
+    @test_throws ArgumentError FlipX(1.2)
+    @test_throws ArgumentError FlipX(-1)
+
+    # flipY
+    @test catlayers(Apollo.flipY(RasterStack(r1, layersfrom=Band)), Band) == Apollo.flipY(r1)  # stack
+    @test Apollo.flipY(tensor(r1)) == tensor(Apollo.flipY(r1))  # tensor
+    @test tensor(apply(FlipY(1), Image(), r1, 123)) == apply(FlipY(1), Image(), tensor(r1), 123)
+    @test size(apply(FlipY(0), Image(), r1, 123)) == (256, 256, 3)
+    @test size(apply(FlipY(0), Image(), r5, 123)) == (3, 128, 128, 9)
+    @test apply(FlipY(1), Image(), r1, 123) == flipY(r1)
+    @test apply(FlipY(0), Image(), r1, 123) == r1
+    @test_throws ArgumentError FlipY(1.2)
+    @test_throws ArgumentError FlipY(-1)
+
+    # rot90
+    @test catlayers(Apollo.rot90(RasterStack(r1, layersfrom=Band)), Band) == Apollo.rot90(r1)  # stack
+    @test Apollo.rot90(tensor(r1)) == tensor(Apollo.rot90(r1)) # tensor
+    @test tensor(apply(Rot90(1), Image(), r1, 123)) == apply(Rot90(1), Image(), tensor(r1), 123)
+    @test size(apply(Rot90(0), Image(), r1, 123)) == (256, 256, 3)
+    @test size(apply(Rot90(0), Image(), r5, 123)) == (3, 128, 128, 9)
+    @test apply(Rot90(1), Image(), r1, 123) == rot90(r1)
+    @test apply(Rot90(0), Image(), r1, 123) == r1
+    @test_throws ArgumentError Rot90(1.2)
+    @test_throws ArgumentError Rot90(-1)
 
     # ComposedTransform
     t = Tensor() |> Normalize(μ, σ) |> Crop(128)

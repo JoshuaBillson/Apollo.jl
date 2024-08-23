@@ -59,19 +59,25 @@ RandomTransform
 ComposedTransform
 Crop
 DeNormalize
+FlipX
+FlipY
 FilteredTransform
 Normalize
 RandomCrop
 Resample
+Rot90
 Tensor
 
 apply
 crop
 denormalize
+flipX
+flipY
 normalize
 raster
 resample
 resize
+rot90
 tensor
 transform
 upsample
