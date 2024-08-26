@@ -51,8 +51,11 @@ zipobs
 # Transforms
 ```@docs
 DType
+AbstractImage
+AbstractMask
 Image
-Mask
+SegMask
+WeightMask
 
 AbstractTransform
 RandomTransform
@@ -63,6 +66,7 @@ FlipX
 FlipY
 FilteredTransform
 Normalize
+OneHot
 RandomCrop
 Resample
 Rot90
@@ -74,6 +78,7 @@ denormalize
 flipX
 flipY
 normalize
+onehot
 raster
 resample
 resize

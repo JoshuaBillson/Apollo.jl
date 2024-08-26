@@ -5,8 +5,14 @@ The super-type of all data types.
 """
 abstract type DType{N} end
 
+"""
+Super-type of all image types.
+"""
 abstract type AbstractImage{N} <: DType{N} end
 
+"""
+Super-type of all mask types.
+"""
 abstract type AbstractMask{N} <: DType{N} end
 
 """
