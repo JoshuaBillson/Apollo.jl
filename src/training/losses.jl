@@ -80,10 +80,23 @@ function (l::WeightedMeanSquaredError)(ŷ::AbstractArray, y::AbstractArray, wei
     return mean(((ŷ .- y) .^ 2) .* weights)
 end
 
-struct DiceLoss <: AbstractLoss end
+struct BinaryDice <: AbstractLoss end
 
-function (l::DiceLoss)(ŷ::AbstractArray, y::AbstractArray)
+function (l::BinaryDice)(ŷ::AbstractArray, y::AbstractArray)
     Flux.dice_coeff_loss(ŷ, y)
+end
+
+struct MultiClassDice <: AbstractLoss end
+
+function (l::MultiClassDice)(ŷ::AbstractArray{<:Real,4}, y::AbstractArray{<:Real,4})
+    nclasses = size(y, 3)
+    ŷ_flat = @pipe permutedims(ŷ, (3, 1, 2, 4)) |> reshape(_, (nclasses, :))
+    y_flat = @pipe permutedims(y, (3, 1, 2, 4)) |> reshape(_, (nclasses, :))
+    l(ŷ_flat, y_flat)
+end
+function (l::MultiClassDice)(ŷ::AbstractArray{<:Real,2}, y::AbstractArray{<:Real,2})
+    nclasses = size(y, 1)
+    return mean([Flux.dice_coeff_loss(ŷ[c,:], y[c,:]) for c in 2:nclasses])
 end
 
 struct MixedLoss{L1<:AbstractLoss,L2<:AbstractLoss,T<:AbstractFloat} <: AbstractLoss
