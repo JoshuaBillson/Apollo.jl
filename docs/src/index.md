@@ -137,8 +137,8 @@ SeparableConv
 # Inputs
 ```@docs
 AbstractInput
-Single
-Series
+RasterInput
+SeriesInput
 build_input
 ```
 
@@ -160,7 +160,7 @@ build_encoder
 ```@docs
 Classifier
 SSC_CNN
-UNet
+SegmentationModel
 ```
 
 # Index

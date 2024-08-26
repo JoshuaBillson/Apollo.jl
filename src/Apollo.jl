@@ -25,9 +25,9 @@ export splitobs, zipobs, repeatobs, takeobs, dropobs, filterobs, mapobs, sampleo
 # Transforms
 include("data/methods.jl")
 include("data/transforms.jl")
-export DType, Image, Mask, AbstractTransform
-export Tensor, Normalize, DeNormalize, Resample, Crop, RandomCrop, FlipX, FlipY, Rot90, FilteredTransform, ComposedTransform
-export tensor, raster, transform, apply, normalize, denormalize, resample, upsample, resize, crop, flipX, flipY, rot90
+export DType, AbstractImage, AbstractMask, Image, SegMask, WeightMask, AbstractTransform
+export Tensor, OneHot, Normalize, DeNormalize, Resample, Crop, RandomCrop, FlipX, FlipY, Rot90, FilteredTransform, ComposedTransform
+export tensor, raster, onehot, onecold, transform, apply, normalize, denormalize, resample, upsample, resize, crop, flipX, flipY, rot90
 
 # Metrics
 include("metrics/interface.jl")
@@ -35,12 +35,16 @@ include("metrics/classification.jl")
 include("metrics/regression.jl")
 export AbstractMetric, ClassificationMetric, RegressionMetric, Metric
 export MIoU, Accuracy, Loss, MSE
-export name, init, update, update!, reset!, compute, evaluate
+export name, init, update, update!, reset!, compute
 
 # Metric Logging
 include("metrics/tracker.jl")
 export Order, Max, Min, Tracker, MetricLogger
 export step!, epoch!, best_epoch, current_epoch, scores, printscores
+
+# Model Evaluation
+include("metrics/evaluation.jl")
+export evaluate, evaluate!
 
 # Training
 include("training/losses.jl")
@@ -55,7 +59,7 @@ export SeparableConv, ConvBlock, Conv, LSTM
 
 # Inputs
 include("models/input.jl")
-export Series, Single
+export RasterInput, SeriesInput
 export build_input
 
 # Encoders
@@ -67,6 +71,6 @@ export build_encoder
 include("models/classifiers.jl")
 include("models/unet.jl")
 include("models/ssc_cnn.jl")
-export Classifier, UNet, SSC_CNN
+export Classifier, SegmentationModel, SSC_CNN
 
 end

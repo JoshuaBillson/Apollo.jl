@@ -1,5 +1,5 @@
 """
-    Classifier(;input=Single(), encoder=ResNet50(), nclasses=2)
+    Classifier(;input=RasterInput(), encoder=ResNet50(), nclasses=2)
 
 Construct an image classifier from the provided encoder.
 """
@@ -11,7 +11,7 @@ end
 
 Flux.@layer Classifier
 
-function Classifier(;input=Single(), encoder=ResNet50(), nclasses=2)
+function Classifier(;input=RasterInput(), encoder=ResNet50(), nclasses=2)
     return Classifier(
         build_input(input, filters(encoder)[1]), 
         build_encoder(encoder), 
