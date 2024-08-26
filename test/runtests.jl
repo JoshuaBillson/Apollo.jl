@@ -5,6 +5,7 @@ using Statistics
 using ArchGDAL
 using Random
 using StableRNGs
+using Pipe: @pipe
 
 const rng = StableRNG(123)
 
@@ -34,7 +35,7 @@ const rng = StableRNG(123)
     # Tensor transform
     @test size.(apply(Tensor(), (Image(), Image()), (r1, r5), 123)) == ((256, 256, 3, 1), (128, 128, 3, 9, 1))
     @test size(apply(Tensor(), Image(), r6, 123)) == (256, 256, 1, 1)
-    @test size(apply(Tensor(), Mask(), r6, 123)) == (256, 256, 1, 1)
+    @test size(apply(Tensor(), SegMask(), r6, 123)) == (256, 256, 1, 1)
     @test size(apply(Tensor(), Image(), RasterStack(r1, layersfrom=Band), 123)) == (256, 256, 3, 1)
     @test size(apply(Tensor(layerdim=Ti), Image(), RasterStack(r5, layersfrom=Ti), 123)) == (128, 128, 3, 9, 1)
     @test size(apply(Tensor(layerdim=Band), Image(), RasterStack(r5, layersfrom=Ti), 123)) == (128, 128, 27, 1)
@@ -44,14 +45,26 @@ const rng = StableRNG(123)
     @test all(raster(tensor(r1), dims(r1)) .== r1)  # raster dims match tensor dims
     @test all(raster(tensor(r2), dims(r2)) .== permutedims(r2, (X,Y,Band)))  # raster dims mismatch tensor dims
 
+    # onehot and onecold
+    logits = [1 2; 3 1]
+    one_hot = reshape(cat([1 0; 0 1], [0 1; 0 0], [0 0; 1 0], dims=3), (2,2,3,1))
+    @test all(Apollo.onehot(logits, [1,2,3]) .== one_hot)
+    @test all(Apollo.onecold(Apollo.onehot(logits, [1,2,3]), [1,2,3]) .== logits)
+
+    # OneHot Transform
+    t = OneHot(labels=[1,2,3])
+    @test apply(t, Image(), logits, 123) == logits
+    @test apply(t, WeightMask(), logits, 123) == logits
+    @test all(apply(t, SegMask(), logits, 123) .== one_hot)
+
     # normalize
     μ = folddims(mean, Float64.(r1))
     σ = folddims(std, Float64.(r1))
     t = Normalize(μ, σ)
     @test all(isapprox.(mean(apply(t, Image(), r1, 123).data, dims=(1,2)), 0, atol=1e-3))  # image mean is 0
     @test all(isapprox.(std(apply(t, Image(), r1, 123).data, dims=(1,2)), 1, atol=1e-3))  # image std is 1
-    @test all(isapprox.(mean(apply(t, Mask(), r1, 123).data, dims=(1,2)), 0.5, atol=0.1))  # mask mean is unchanged
-    @test all(isapprox.(std(apply(t, Mask(), r1, 123).data, dims=(1,2)), 0.28, atol=0.1))  # mask std is unchanged
+    @test all(isapprox.(mean(apply(t, SegMask(), r1, 123).data, dims=(1,2)), 0.5, atol=0.1))  # mask mean is unchanged
+    @test all(isapprox.(std(apply(t, SegMask(), r1, 123).data, dims=(1,2)), 0.28, atol=0.1))  # mask std is unchanged
     @test all(isapprox.(mean(apply(t, Image(), tensor(r1), 123), dims=(1,2)), 0, atol=1e-3))  # tensor mean is 0
     @test all(isapprox.(std(apply(t, Image(), tensor(r1), 123), dims=(1,2)), 1, atol=1e-3))  # tensor std is 1
 
@@ -78,7 +91,7 @@ const rng = StableRNG(123)
     @test size(apply(Resample(0.5), Image(), r1, 123)) == (128, 128, 3)
     @test size(apply(Resample(0.5), Image(), r5, 123)) == (3, 64, 64, 9)
     @test size(apply(Resample(2.0), Image(), tensor(r5), 123)) == (256, 256, 3, 9, 1)
-    @test all(x -> x in vals, apply(Resample(2), Mask(), r1, 123))
+    @test all(x -> x in vals, apply(Resample(2), SegMask(), r1, 123))
     @test_throws ArgumentError Resample(0)
 
     # upsample
@@ -119,15 +132,15 @@ const rng = StableRNG(123)
 
     # Crop transform
     @test size(apply(Crop(128), Image(), r1, 123)) == (128, 128, 3)
-    @test size(apply(Crop(32), Mask(), r5, 123)) == (3, 32, 32, 9)
-    @test size(apply(Crop(32), Mask(), tensor(r5), 123)) == (32, 32, 3, 9, 1)
+    @test size(apply(Crop(32), SegMask(), r5, 123)) == (3, 32, 32, 9)
+    @test size(apply(Crop(32), SegMask(), tensor(r5), 123)) == (32, 32, 3, 9, 1)
 
     # Test Random Outcome
     @test isapprox(sum([Apollo._apply_random(rand(1:1000000), 0.3) for _ in 1:10000]) / 10000, 0.3, atol=0.02)
 
     # RandomCrop transform
     @test size(apply(RandomCrop(128), Image(), r1, 123)) == (128, 128, 3)
-    @test size(apply(RandomCrop(32), Mask(), r5, 123)) == (3, 32, 32, 9)
+    @test size(apply(RandomCrop(32), SegMask(), r5, 123)) == (3, 32, 32, 9)
     @test size(apply(RandomCrop(32), Image(), tensor(r5), 123)) == (32, 32, 3, 9, 1)
     @test apply(RandomCrop(32), Image(), r1, 123) != Apollo.crop(r1, 32)
 
@@ -396,17 +409,17 @@ end
     x2 = rand(rng, Float32, 128, 128, 2, 6, 1)
     encoders = [ResNet18(), ResNet34(), ResNet50(), ResNet101(), ResNet152()]
 
-    # UNet
+    # SegmentationModel
     for encoder in encoders
-        unet = UNet(input=Single(channels=4), encoder=encoder)
-        unet_ts = UNet(input=Series(channels=2), encoder=encoder)
+        unet = SegmentationModel(input=RasterInput(channels=4), encoder=encoder)
+        unet_ts = SegmentationModel(input=SeriesInput(channels=2), encoder=encoder)
         @test size(unet(x1)) == (128, 128, 1, 1)
         @test size(unet_ts(x2)) == (128, 128, 1, 1)
     end
 
     # Classifier
     for encoder in encoders
-        classifier = Classifier(input=Single(channels=4), encoder=encoder, nclasses=10)
+        classifier = Classifier(input=RasterInput(channels=4), encoder=encoder, nclasses=10)
         @test size(classifier(x1)) == (10, 1)
     end
 
