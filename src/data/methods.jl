@@ -34,10 +34,42 @@ Restore the raster dimensions given by `dims` to the provided tensor. The final 
 `tensor`, which is assumed to be the observation dimension, will be dropped.
 """
 function raster(tensor::AbstractArray{T,N}, dims::Tuple; missingval=0) where {T,N}
+    hasdim(dims, Band) || return raster(tensor, (dims..., Band); missingval=missingval)
     @assert length(dims) == (N - 1) "Tensor dims do not match raster dims"
     @assert size(tensor, N) == 1 "Cannot convert tensors with multiple observations!"
     sorted_dims = Rasters.dims(dims, Rasters.commondims((X,Y,Z,Band,Ti), dims))  # Enforce (X,Y,Z,Band,Ti) Order
     return Raster(selectdim(tensor, N, 1), sorted_dims, missingval=T(missingval))
+end
+
+"""
+    onehot([precision], logits::AbstractArray, labels)
+
+Encode `logits` as a one-hot encoded tensor with the specified `precision`.
+
+# Parameters
+- `precision`: Any `AbstractFloat` to use as the tensor's type (default = `Float32`).
+- `labels`: The labels to use in the one-hot encoding. The first label will be assigned to the first index,
+the second label to the second index, and so on.
+"""
+onehot(logits::AbstractArray, labels) = onehot(Float32, logits, labels)
+function onehot(T::Type{<:AbstractFloat}, logits::AbstractRaster, labels)
+    return onehot(T, tensor(logits), labels)
+end
+function onehot(T::Type{<:AbstractFloat}, logits::AbstractArray{<:Real,2}, labels)
+    return onehot(T, reshape(logits, (size(logits)..., 1, 1)), labels)
+end
+function onehot(T::Type{<:AbstractFloat}, logits::AbstractArray{<:Real,3}, labels)
+    return onehot(T, reshape(logits, (size(logits)..., 1)), labels)
+end
+function onehot(T::Type{<:AbstractFloat}, logits::AbstractArray{<:Real,4}, labels)
+    @assert size(logits, 3) == 1
+    return cat(map(label -> T.(logits .== label), labels)..., dims=3)
+end
+
+function onecold(ŷ::AbstractArray{<:Real,4}, labels::AbstractVector{<:Real})
+    @assert size(ŷ, 3) == length(labels)
+    indices = mapslices(argmax, ŷ, dims=3)
+    return @pipe getindex.(Ref(labels), indices) |> dropdims(_, dims=(3,4))
 end
 
 """

@@ -5,12 +5,16 @@ The super-type of all data types.
 """
 abstract type DType{N} end
 
+abstract type AbstractImage{N} <: DType{N} end
+
+abstract type AbstractMask{N} <: DType{N} end
+
 """
     Image([name])
 
 Represents a type consisting of image data.
 """
-struct Image{N} <: DType{N} end
+struct Image{N} <: AbstractImage{N} end
 
 Image() = Image(:x)
 Image(x::Symbol) = Image{x}()
@@ -18,11 +22,21 @@ Image(x::Symbol) = Image{x}()
 Base.show(io::IO, x::Image{N}) where N = print(io, "Image(:$N)")
 
 """
-    Mask([name])
+    SegMask([name])
 
-Represents an instance of mask data.
+Represents an instance of a segmentation mask.
 """
-struct Mask{N} <: DType{N} end
+struct SegMask{N} <: AbstractMask{N} end
 
-Mask() = Mask(:y)
-Mask(x::Symbol) = Mask{x}()
+SegMask() = SegMask(:y)
+SegMask(x::Symbol) = SegMask{x}()
+
+"""
+    WeightMask([name])
+
+Represents an instance of a weight mask.
+"""
+struct WeightMask{N} <: AbstractMask{N} end
+
+WeightMask() = WeightMask(:w)
+WeightMask(x::Symbol) = WeightMask{x}()

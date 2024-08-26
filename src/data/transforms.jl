@@ -75,6 +75,29 @@ end
 
 description(x::Tensor) = "Transform to tensor."
 
+# OneHot Transform
+
+"""
+    OneHot(;precision=Float32, labels=[0,1])
+
+Convert an array of logits into a one-hot-encoded tensor with the specified `precision`.
+
+# Parameters
+- `precision`: Any `AbstractFloat` to use as the tensor's type (default = `Float32`).
+- `labels`: The labels to use in the one-hot encoding. The first label will be assigned to the first index,
+the second label to the second index, and so on.
+"""
+struct OneHot{L,T} <: AbstractTransform
+    labels::L
+    precision::Type{T}
+end
+
+OneHot(;precision=Float32, labels=[0,1]) = OneHot(labels, precision)
+
+apply(t::OneHot, ::SegMask, x, ::Int) = Apollo.onehot(t.precision, x, t.labels)
+
+description(x::OneHot) = "One-hot encode labels."
+
 # Normalize Transform
 
 """
@@ -98,9 +121,9 @@ function Normalize(μ, σ; dim=3)
     return Normalize(dim, Float64.(μ), Float64.(σ))
 end
 
-apply(t::Normalize, ::Image, x, ::Int) = normalize(x, t.μ, t.σ, dim=t.dim)
+apply(t::Normalize, ::AbstractImage, x, ::Int) = normalize(x, t.μ, t.σ, dim=t.dim)
 
-description(x::Normalize) = "Normalize by channel dimension."
+description(x::Normalize) = "Normalize bands."
 
 # DeNormalize Transform
 
@@ -125,9 +148,9 @@ function DeNormalize(μ, σ; dim=3)
     return DeNormalize(dim, Float64.(μ), Float64.(σ))
 end
 
-apply(t::DeNormalize, ::Image, x, ::Int) = denormalize(x, t.μ, t.σ, dim=t.dim)
+apply(t::DeNormalize, ::AbstractImage, x, ::Int) = denormalize(x, t.μ, t.σ, dim=t.dim)
 
-description(x::DeNormalize) = "Denormalize by channel dimension."
+description(x::DeNormalize) = "Denormalize bands."
 
 # Resample Transform
 
@@ -151,8 +174,8 @@ function Resample(scale::Number)
     Resample(Float64(scale))
 end
 
-apply(t::Resample, ::Mask, x, ::Int) = resample(x, t.scale, :nearest)
-function apply(t::Resample, ::Image, x, ::Int)
+apply(t::Resample, ::AbstractMask, x, ::Int) = resample(x, t.scale, :nearest)
+function apply(t::Resample, ::AbstractImage, x, ::Int)
     return t.scale > 1 ? resample(x, t.scale, :bilinear) : resample(x, t.scale, :average)
 end
 
@@ -279,15 +302,14 @@ julia> r = Raster(rand(256,256, 3), (X,Y,Band));
 
 julia> t = Image(:x2) * Resample(2.0);
 
-julia> apply(t, Image(), r, 123) |> size
+julia> apply(t, Image(), r, 123) |> size  # type matches but not name
 (256, 256, 3)
 
-julia> apply(t, Image(:x2), r, 123) |> size
+julia> apply(t, Mask(:x2), r, 123) |> size  # name matches but not type
+(256, 256, 3)
+
+julia> apply(t, Image(:x2), r, 123) |> size  # both type and name match
 (512, 512, 3)
-
-julia> apply(t, Mask(:x2), r, 123) |> size
-(256, 256, 3)
-
 ```
 """
 struct FilteredTransform{D<:DType,T<:AbstractTransform} <: AbstractTransform
