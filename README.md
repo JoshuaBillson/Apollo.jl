@@ -25,7 +25,7 @@ overlapping tiles.
 xsampler = A.TileView(features, 512)
 ysampler = A.TileView(labels, 512)
 data = A.zipobs(xsampler, ysampler)
-
+```
 
 `TileView` produces a lazy iterator over the generated tiles, which we can then split
 into a 70/30 train/test split with the `splitobs` method.
