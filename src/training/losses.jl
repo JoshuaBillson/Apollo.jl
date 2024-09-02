@@ -43,6 +43,13 @@ function (l::WeightedLoss)(m, batch::Tuple)
     return l(m(batch[1:end-2]...), batch[end-1], batch[end])
 end
 
+struct CrossEntropy <: AbstractLoss end
+
+(l::CrossEntropy)(ŷ::AbstractArray{<:Real,4}, y::AbstractArray{<:Real,4}) = l(_flatten(ŷ), _flatten(y))
+function (l::CrossEntropy)(ŷ::AbstractArray{<:Real,2}, y::AbstractArray{<:Real,2})
+    return Flux.crossentropy(ŷ, y)
+end
+
 struct BinaryCrossEntropy <: AbstractLoss end
 
 function (l::BinaryCrossEntropy)(ŷ::AbstractArray, y::AbstractArray)
@@ -88,12 +95,7 @@ end
 
 struct MultiClassDice <: AbstractLoss end
 
-function (l::MultiClassDice)(ŷ::AbstractArray{<:Real,4}, y::AbstractArray{<:Real,4})
-    nclasses = size(y, 3)
-    ŷ_flat = @pipe permutedims(ŷ, (3, 1, 2, 4)) |> reshape(_, (nclasses, :))
-    y_flat = @pipe permutedims(y, (3, 1, 2, 4)) |> reshape(_, (nclasses, :))
-    l(ŷ_flat, y_flat)
-end
+(l::MultiClassDice)(ŷ::AbstractArray{<:Real,4}, y::AbstractArray{<:Real,4}) = l(_flatten(ŷ), _flatten(y))
 function (l::MultiClassDice)(ŷ::AbstractArray{<:Real,2}, y::AbstractArray{<:Real,2})
     nclasses = size(y, 1)
     return mean([Flux.dice_coeff_loss(ŷ[c,:], y[c,:]) for c in 2:nclasses])
@@ -125,7 +127,11 @@ function (l::MaskedLoss)(ŷ::AbstractArray, y::AbstractArray, mask::AbstractArr
 end
 
 function _select_obs(x::AbstractArray{<:Real,4}, mask::AbstractArray{<:Real,4})
-    flattened = @pipe permutedims(x, (3,1,2,4)) |> reshape(_, (size(x,3), :))
-    indices = @pipe permutedims(mask, (3,1,2,4)) |> reshape(_, (:)) |> findall
-    return flattened[:,indices]
+    x_flat = _flatten(x)
+    indices = _flatten(mask) |> findall
+    return x_flat[:,indices]
+end
+
+function _flatten(x::AbstractArray{<:Real,4})
+    return @pipe permutedims(x, (3, 1, 2, 4)) |> reshape(_, (size(x, 3), :))
 end

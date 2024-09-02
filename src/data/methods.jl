@@ -58,9 +58,6 @@ end
 function onehot(T::Type{<:AbstractFloat}, logits::AbstractArray{<:Real,2}, labels)
     return onehot(T, reshape(logits, (size(logits)..., 1, 1)), labels)
 end
-function onehot(T::Type{<:AbstractFloat}, logits::AbstractArray{<:Real,3}, labels)
-    return onehot(T, reshape(logits, (size(logits)..., 1)), labels)
-end
 function onehot(T::Type{<:AbstractFloat}, logits::AbstractArray{<:Real,4}, labels)
     @assert size(logits, 3) == 1
     return cat(map(label -> T.(logits .== label), labels)..., dims=3)
