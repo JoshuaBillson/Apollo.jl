@@ -58,7 +58,6 @@ function build_deeplab_aspp(in_filters)
 end
 
 function aspp_concat(x1, x2, x3, x4, x5)
-    @debug size.((x1, x2, x3, x4, x5))
     x1 = Flux.upsample_bilinear(x1, size=size(x2)[1:2])
     return cat(x1, x2, x3, x4, x5, dims=3)
 end

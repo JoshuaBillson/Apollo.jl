@@ -66,14 +66,12 @@ end
 
 function _unet_encoder_forward(layers::Tuple, x)
     res = first(layers)(x)
-    @debug size(res)
     return (_unet_encoder_forward(Base.tail(layers), res)..., res)
   end
  _unet_encoder_forward(::Tuple{}, x) = ()
 
  function _unet_decoder_forward(layers::Tuple, skip, x)
     res = first(layers)((x, first(skip)))
-    @debug size(res)
     return _unet_decoder_forward(Base.tail(layers), Base.tail(skip), res)
  end
  _unet_decoder_forward(::Tuple{}, skip, x) = x
