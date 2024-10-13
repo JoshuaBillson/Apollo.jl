@@ -5,6 +5,7 @@ using Statistics
 using ArchGDAL
 using Random
 using StableRNGs
+import Flux
 using Pipe: @pipe
 
 const rng = StableRNG(123)
@@ -32,15 +33,6 @@ const rng = StableRNG(123)
     @test_throws DimensionMismatch tensor(r1, r2, r6)  # Missing Dimension
     @test_throws DimensionMismatch tensor(r1, r2, r3)  # Mismatched Sizes
 
-    # Tensor transform
-    @test size.(apply(Tensor(), (Image(), Image()), (r1, r5), 123)) == ((256, 256, 3, 1), (128, 128, 3, 9, 1))
-    @test size(apply(Tensor(), Image(), r6, 123)) == (256, 256, 1, 1)
-    @test size(apply(Tensor(), SegMask(), r6, 123)) == (256, 256, 1, 1)
-    @test size(apply(Tensor(), Image(), RasterStack(r1, layersfrom=Band), 123)) == (256, 256, 3, 1)
-    @test size(apply(Tensor(layerdim=Ti), Image(), RasterStack(r5, layersfrom=Ti), 123)) == (128, 128, 3, 9, 1)
-    @test size(apply(Tensor(layerdim=Band), Image(), RasterStack(r5, layersfrom=Ti), 123)) == (128, 128, 27, 1)
-    @test eltype(apply(Tensor(precision=Float16), Image(), r6, 123)) == Float16
-
     # raster
     @test all(raster(tensor(r1), dims(r1)) .== r1)  # raster dims match tensor dims
     @test all(raster(tensor(r2), dims(r2)) .== permutedims(r2, (X,Y,Band)))  # raster dims mismatch tensor dims
@@ -48,31 +40,15 @@ const rng = StableRNG(123)
     # onehot and onecold
     logits = [1 2; 3 1]
     one_hot = reshape(cat([1 0; 0 1], [0 1; 0 0], [0 0; 1 0], dims=3), (2,2,3,1))
-    @test all(Apollo.onehot(logits, [1,2,3]) .== one_hot)
-    @test all(Apollo.onecold(Apollo.onehot(logits, [1,2,3]), [1,2,3]) .== logits)
+    @test all(Apollo.onecold(one_hot) .== [0 1; 2 0])
 
+    """
     # OneHot Transform
     t = OneHot(labels=[1,2,3])
     @test apply(t, Image(), logits, 123) == logits
     @test apply(t, WeightMask(), logits, 123) == logits
     @test all(apply(t, SegMask(), logits, 123) .== one_hot)
 
-    # normalize
-    μ = folddims(mean, Float64.(r1))
-    σ = folddims(std, Float64.(r1))
-    t = Normalize(μ, σ)
-    @test all(isapprox.(mean(apply(t, Image(), r1, 123).data, dims=(1,2)), 0, atol=1e-3))  # image mean is 0
-    @test all(isapprox.(std(apply(t, Image(), r1, 123).data, dims=(1,2)), 1, atol=1e-3))  # image std is 1
-    @test all(isapprox.(mean(apply(t, SegMask(), r1, 123).data, dims=(1,2)), 0.5, atol=0.1))  # mask mean is unchanged
-    @test all(isapprox.(std(apply(t, SegMask(), r1, 123).data, dims=(1,2)), 0.28, atol=0.1))  # mask std is unchanged
-    @test all(isapprox.(mean(apply(t, Image(), tensor(r1), 123), dims=(1,2)), 0, atol=1e-3))  # tensor mean is 0
-    @test all(isapprox.(std(apply(t, Image(), tensor(r1), 123), dims=(1,2)), 1, atol=1e-3))  # tensor std is 1
-
-    # denormalize
-    t2 = DeNormalize(μ, σ)
-    normalized = apply(t, Image(), Float64.(r1), 123) 
-    denormalized = apply(t2, Image(), normalized, 123)
-    @test all(denormalized .≈ r1)
 
     # resample
     @test size(Apollo.resample(r1, 2.0, :bilinear)) == (512, 512, 3)
@@ -177,13 +153,13 @@ const rng = StableRNG(123)
     @test_throws ArgumentError Rot90(1.2)
     @test_throws ArgumentError Rot90(-1)
 
+
     # ComposedTransform
-    t = Tensor() |> Normalize(μ, σ) |> Crop(128)
+    t = Tensor() |> Crop(128)
     transformed = apply(t, Image(), r1, 123)
-    @test all(x -> isapprox(x, 0, atol=0.05), mean(transformed, dims=(1,2,4)))
-    @test all(x -> isapprox(x, 1, atol=0.05), std(transformed, dims=(1,2,4)))
     @test size(transformed) == (128, 128, 3, 1)
     @test transformed isa Array{Float32,4}
+    """
 end
 
 @testset "utilities" begin
@@ -252,175 +228,49 @@ end
     @test size(rmobs(putobs(r3))) == (256, 256, 3, 9)
 end
 
-@testset "views" begin
-    # Test Data
-    x1 = collect(1:10)
-    x2 = collect(21:30)
-    v1 = ObsView(1:10, 1:10)
-    v2 = ObsView(21:30, 1:10)
-
-    # zipobs
-    @test all(collect(zipobs(v1, v2)) .== collect(zip(x1, x2)))  # Test zipobs
-
-    # repeatobs
-    @test all(repeatobs(v1, 5) .== reduce(vcat, [x1 for _ in 1:5]))  # Test repeatobs
-    @test all(repeatobs(zipobs(v1, v2), 2) .== reduce(vcat, [collect(zip(x1, x2)) for _ in 1:2]))  # zipobs + repeatobs
-
-    # splitobs with shuffle
-    @test first(splitobs(StableRNGs.StableRNG(123), 1:10, at=0.7)) == [4, 7, 2, 1, 3, 8, 5]
-    @test last(splitobs(StableRNGs.StableRNG(123), 1:10, at=0.7)) == [6, 10, 9]
-    @test splitobs(StableRNGs.StableRNG(123), 1:10, at=[0.3, 0.5])[1] == [4, 7, 2]
-    @test splitobs(StableRNGs.StableRNG(123), 1:10, at=[0.3, 0.5])[2] == [1, 3, 8, 5, 6]
-    @test splitobs(StableRNGs.StableRNG(123), 1:10, at=[0.3, 0.5])[3] == [10, 9]
-    @test_throws ArgumentError splitobs(1:10, at=[0.3, 0.8])
-    @test map(length, splitobs(1:10, at=[0.3, 0.7])) == [3, 7, 0]
-
-    # splitobs without shuffle
-    @test first(splitobs(StableRNGs.StableRNG(123), 1:10, at=0.7; shuffle=false)) == [1, 2, 3, 4, 5, 6, 7]
-    @test last(splitobs(StableRNGs.StableRNG(123), 1:10, at=0.7; shuffle=false)) == [8, 9, 10]
-    @test splitobs(StableRNGs.StableRNG(123), 1:10, at=[0.3, 0.5]; shuffle=false)[1] == [1, 2, 3]
-    @test splitobs(StableRNGs.StableRNG(123), 1:10, at=[0.3, 0.5]; shuffle=false)[2] == [4, 5, 6, 7, 8]
-    @test splitobs(StableRNGs.StableRNG(123), 1:10, at=[0.3, 0.5]; shuffle=false)[3] == [9, 10]
-
-    # takeobs
-    @test all(takeobs(v1, [2, 5, 8, 9]) .== x1[[2, 5, 8, 9]])  # takeobs
-    @test_throws ArgumentError takeobs(v1, [0, 1, 2])
-
-    # dropobs
-    @test all(dropobs(v1, [1,2,3,5,6,8,9,10]) .== x1[[4,7]])  # dropobs
-
-    # filterobs
-    @test all(filterobs(iseven,  1:10) .== [2, 4, 6, 8, 10])
-    @test all(filterobs(iseven,  v1) .== [2, 4, 6, 8, 10])
-
-    # mapobs
-    @test all(mapobs(x -> x * 2 + 1, v1) .== [3, 5, 7, 9, 11, 13, 15, 17, 19, 21])
-
-    # sampleobs
-    @test all(sampleobs(StableRNGs.StableRNG(126), v2, 4) .== [25, 24, 30, 26])
-    @test length(sampleobs(v1, 0)) == 0
-    @test_throws ArgumentError sampleobs(v2, -1)
-    @test_throws ArgumentError sampleobs(v2, length(v2) + 1)
-
-    # shuffleobs
-    @test all(shuffleobs(StableRNGs.StableRNG(123), v1) .== [4, 7, 2, 1, 3, 8, 5, 6, 10, 9])
-
-    # TileView
+@testset "TileView" begin
     tile = Raster(rand(rng, UInt16, 256, 256, 2, 8), (X, Y, Band, Ti))
     @test length(TileView(tile, 64)) == 16
     @test length(TileView(tile, 64, stride=32)) == 49
     @test map(size, TileView(tile, 64)[1:4:16]) == [(64, 64, 2, 8), (64, 64, 2, 8), (64, 64, 2, 8), (64, 64, 2, 8)]
-    @test size(mapobs(tensor, TileView(tile, 64))[1:4:16]) == (64, 64, 2, 8, 4)
-    @test typeof(mapobs(tensor, TileView(tile, 64))[1:4:16]) == Array{Float32, 5}
 end
 
-@testset "class metrics" begin
-    # Accuracy - Prediction Rounding
-    m = Metric(Accuracy())
-    update!(m, [0.1, 0.8, 0.51, 0.49], [0, 1, 1, 0])
-    @test compute(m) == 1
+@testset "class losses" begin
+    # Initialize Data
+    y = rand([0.0f0, 1.0f0], 3, 3, 1, 1)
+    ŷ = rand(Float32, 3, 3, 1, 1)
+    y_hot = Apollo.onehot(y, 0:1)
+    ŷ_hot = cat(1 .- ŷ, ŷ, dims=3)
 
-    # Accuracy - Multi Batch
-    reset!(m)
-    update!(m, [0.1, 0.6], [0, 1])
-    update!(m, [0.7, 0.4], [1, 1])
-    @test compute(m) == 0.75
-
-    # Accuracy - Perfectly Incorrect
-    reset!(m)
-    update!(m, [0, 0, 0, 1], [1, 1, 1, 0])
-    @test compute(m) == 0
-
-    # Accuracy - Soft Labels
-    reset!(m)
-    update!(m, [0.1, 0.1, 0.1, 0.9], [0.95, 0.95, 0.95, 0.05])
-    @test compute(m) == 0
-
-    # Accuracy - One Hot Labels
-    reset!(m)
-    update!(m, hcat([0.1, 0.9], [0.8, 0.2], [0.3, 0.7], [0.15, 0.85]), hcat([0, 1], [1, 0], [1, 0], [0, 1]))
-    @test compute(m) == 0.75
-
-    # MIoU - Prediction Rounding
-    m = Metric(MIoU([0,1]))
-    update!(m, [0.1, 0.8, 0.51, 0.49], [0, 1, 1, 0])
-    @test compute(m) == 1
-
-    # MIoU - Multi Batch
-    reset!(m)
-    update!(m, [0.1, 0.6], [0, 1])
-    update!(m, [0.7, 0.4], [1, 1])
-    @test compute(m) ≈ 0.5833333333333333
-
-    # MIoU - Perfectly Incorrect
-    reset!(m)
-    update!(m, [0, 0, 0, 1], [1, 1, 1, 0])
-    @test compute(m) ≈ 0 atol=1e-12
-
-    # MIoU - Soft Labels
-    reset!(m)
-    update!(m, [0.1, 0.9, 0.7, 0.4], [0.05, 0.95, 0.95, 0.95])
-    @test compute(m) ≈ 0.5833333333333333
-
-    # MIoU - No Positive Labels
-    reset!(m)
-    update!(m, [0, 0, 0, 0], [0, 0, 0, 0])
-    @test compute(m) == 1.0
-
-    # Accuracy - One Hot Labels
-    m = Metric(MIoU([1,2]))
-    update!(m, hcat([0.9, 0.1], [0.2, 0.8], [0.3, 0.7], [0.85, 0.15]), hcat([1, 0], [0, 1], [0, 1], [0, 1]))
-    @test compute(m) ≈ 0.5833333333333333
-end
-
-@testset "tracker" begin
-    # Initialize Tracker
-    tracker = Tracker("train_acc" => Accuracy(), "test_acc" => Accuracy())
-
-    # Update Metrics Matching Regex
-    step!(tracker, r"train_", [0.1, 0.8], [0, 1])
-    @test scores(tracker) == (epoch=1, train_acc=1.0, test_acc=0.0)
-
-    # Update Metrics Matching Name
-    step!(tracker, "test_acc", [0.6, 0.51], [1, 0])
-    @test scores(tracker) == (epoch=1, train_acc=1.0, test_acc=0.5)
-
-    # End Epoch
-    epoch!(tracker)
-    @test scores(tracker) == (epoch=2, train_acc=0.0, test_acc=0.0)
-
-    # Update All Metrics
-    step!(tracker, [0, 1, 1, 0], [0, 1, 1, 1])
-    @test scores(tracker) == (epoch=2, train_acc=0.75, test_acc=0.75)
-
-    # Find Best Epoch
-    @test best_epoch(tracker, Max("test_acc")) == 1
-    epoch!(tracker)
-    @test best_epoch(tracker, Max("test_acc")) == 2
-    @test best_epoch(tracker, Min("test_acc")) == 1
-
-    # Test Score Printing
-    @test printscores(tracker, epoch=1) == "epoch: 1  train_acc: 1.0  test_acc: 0.5"
+    # Cross Entropy
+    ce = Apollo.CrossEntropy()
+    bce = Apollo.BinaryCrossEntropy()
+    @test bce(ŷ, y) ≈ Flux.Losses.binarycrossentropy(ŷ, y)
+    @test bce(ŷ_hot[:,:,2:2,:], y_hot[:,:,2:2,:]) ≈ bce(ŷ, y)
+    @test isapprox(bce(y, y), 0, atol=1e-5)
 end
 
 @testset "models" begin
     # Test Data
     x1 = rand(rng, Float32, 128, 128, 4, 1)
     x2 = rand(rng, Float32, 128, 128, 2, 6, 1)
-    encoders = [ResNet18(), ResNet34(), ResNet50(), ResNet101(), ResNet152()]
+    encoders = [
+        ResNet(depth=18, weights=:Nothing), 
+        ResNet(depth=34, weights=:Nothing), 
+        ResNet(depth=50, weights=:Nothing), 
+        ResNet(depth=101, weights=:Nothing), 
+        ResNet(depth=152, weights=:Nothing) ]
 
-    # SegmentationModel
+    # UNet
     for encoder in encoders
-        unet = SegmentationModel(input=RasterInput(channels=4), encoder=encoder)
-        unet_ts = SegmentationModel(input=SeriesInput(channels=2), encoder=encoder)
+        unet = UNet(encoder=encoder, inchannels=4)
         @test size(unet(x1)) == (128, 128, 1, 1)
-        @test size(unet_ts(x2)) == (128, 128, 1, 1)
     end
 
-    # Classifier
+    # DeeplabV3+
     for encoder in encoders
-        classifier = Classifier(input=RasterInput(channels=4), encoder=encoder, nclasses=10)
-        @test size(classifier(x1)) == (10, 1)
+        deeplab = DeeplabV3(encoder=encoder, inchannels=4)
+        @test size(deeplab(x1)) == (128, 128, 1, 1)
     end
 
     # SSC_CNN

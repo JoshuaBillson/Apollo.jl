@@ -195,6 +195,8 @@ julia> zip([1, 2, 3], [:a, :b, :c]) |> collect |> unzip
 unzip(x::AbstractVector) = x
 unzip(x::AbstractVector{<:Tuple}) = map(f -> getfield.(x, f), fieldnames(eltype(x)))
 
+_flatten(x::AbstractArray{<:Real,4}) = @pipe permutedims(x, (3, 1, 2, 4)) |> reshape(_, (size(x, 3), :))
+
 _all_equal(f, xs) = map(f, xs) |> _all_equal
 _all_equal(xs) = all(==(first(xs)), xs)
 

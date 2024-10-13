@@ -1,7 +1,6 @@
 """
     linear_stretch(x::AbstractArray{<:Real,3}, lb::Vector{<:Real}, ub::Vector{<:Real})
 
-
 Perform a linear histogram stretch on `x` such that `lb` is mapped to 0 and `ub` is mapped to 1.
 Values outside the interval `[lb, ub]` will be clamped.
 """

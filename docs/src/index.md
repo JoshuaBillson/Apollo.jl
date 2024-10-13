@@ -27,27 +27,6 @@ vec2array
 zeros_like
 ```
 
-# Data Views
-```@docs
-AbstractIterator
-JoinedView
-MappedView
-ObsView
-TileView
-TransformedView
-ZippedView
-
-dropobs
-filterobs
-mapobs
-repeatobs
-sampleobs
-shuffleobs
-splitobs
-takeobs
-zipobs
-```
-
 # Transforms
 ```@docs
 DType
@@ -61,11 +40,9 @@ AbstractTransform
 RandomTransform
 ComposedTransform
 Crop
-DeNormalize
 FlipX
 FlipY
 FilteredTransform
-Normalize
 OneHot
 RandomCrop
 Resample
@@ -74,10 +51,8 @@ Tensor
 
 apply
 crop
-denormalize
 flipX
 flipY
-normalize
 onehot
 raster
 resample
@@ -98,6 +73,8 @@ Metric
 Accuracy
 MIoU
 MSE
+Precision
+Recall
 Loss
 compute
 evaluate

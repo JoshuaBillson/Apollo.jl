@@ -52,68 +52,20 @@ Encode `logits` as a one-hot encoded tensor with the specified `precision`.
 the second label to the second index, and so on.
 """
 onehot(logits::AbstractArray, labels) = onehot(Float32, logits, labels)
-function onehot(T::Type{<:AbstractFloat}, logits::AbstractRaster, labels)
-    return onehot(T, tensor(logits), labels)
-end
-function onehot(T::Type{<:AbstractFloat}, logits::AbstractArray{<:Real,2}, labels)
-    return onehot(T, reshape(logits, (size(logits)..., 1, 1)), labels)
-end
-function onehot(T::Type{<:AbstractFloat}, logits::AbstractArray{<:Real,4}, labels)
-    @assert size(logits, 3) == 1
-    return cat(map(label -> T.(logits .== label), labels)..., dims=3)
-end
+onehot(T::Type{<:AbstractFloat}, logits::AbstractRaster, labels) = onehot(T, tensor(logits), labels)
+onehot(T::Type{<:AbstractFloat}, logits::AbstractVector, labels) = onehot(T, reshape(logits, (1,:)), labels)
+onehot(T::Type{<:AbstractFloat}, logits::AbstractArray{<:Real,2}, labels) = T.(_onehot(logits, labels, 1))
+onehot(T::Type{<:AbstractFloat}, logits::AbstractArray{<:Real,4}, labels) = T.(_onehot(logits, labels, 3))
 
-function onecold(ŷ::AbstractArray{<:Real,4}, labels::AbstractVector{<:Real})
-    @assert size(ŷ, 3) == length(labels)
-    indices = mapslices(argmax, ŷ, dims=3)
-    return @pipe getindex.(Ref(labels), indices) |> dropdims(_, dims=(3,4))
+function _onehot(logits::AbstractArray, labels, dim::Int)
+    @assert size(logits, dim) == 1
+    return cat(map(label -> logits .== label, labels)..., dims=dim)
 end
 
-"""
-    normalize(x::AbstractArray, μ::AbstractVector, σ::AbstractVector; dim=3)
+onecold(x::AbstractArray{T,2}) where {T <: Real} = T.(_onecold(x, 1))
+onecold(x::AbstractArray{T,4}) where {T <: Real} = T.(_onecold(x, 3))
 
-Normalize the input array with respect to the specified dimension so that the mean is 0
-and the standard deviation is 1.
-
-# Parameters
-- `μ`: A `Vector` of means for each index in `dim`.
-- `σ`: A `Vector` of standard deviations for each index in `dim`.
-- `dim`: The dimension along which to normalize the input array.
-"""
-function normalize(x::AbstractArray{<:Real}, μ::AbstractArray{<:Real}, σ::AbstractArray{<:Real}; dim=3)
-    return _normalize(x, μ, σ, dim)
-end
-
-_normalize(x::AbstractRaster, μ, σ, dim::Rasters.Dimension) = _normalize(x, μ, σ, Rasters.dimnum(x, dim))
-_normalize(x::AbstractRaster, μ, σ, dim::Int) = Rasters.modify(x -> _normalize(x, μ, σ, dim), x)
-function _normalize(x::AbstractArray, μ, σ, dim::Int)
-    μ = vec2array(μ, x, dim)
-    σ = vec2array(σ, x, dim)
-    return (x .- μ) ./ σ
-end
-
-"""
-    denormalize(x::AbstractArray, μ::AbstractVector, σ::AbstractVector; dim=3)
-
-Denormalize the input array with respect to the specified dimension. Reverses the
-effect of `normalize`.
-
-# Parameters
-- `μ`: A `Vector` of means for each index in `dim`.
-- `σ`: A `Vector` of standard deviations for each index in `dim`.
-- `dim`: The dimension along which to denormalize the input array.
-"""
-function denormalize(x::AbstractArray{<:Real}, μ::AbstractArray{<:Real}, σ::AbstractArray{<:Real}; dim=3)
-    return _denormalize(x, μ, σ, dim)
-end
-
-_denormalize(x::AbstractRaster, μ, σ, dim::Rasters.Dimension) = _denormalize(x, μ, σ, Rasters.dimnum(x, dim))
-_denormalize(x::AbstractRaster, μ, σ, dim::Int) = Rasters.modify(x -> _denormalize(x, μ, σ, dim), x)
-function _denormalize(x::AbstractArray, μ, σ, dim::Int)
-    μ = vec2array(μ, x, dim)
-    σ = vec2array(σ, x, dim)
-    return (x .* σ) .+ μ
-end
+_onecold(x::AbstractArray, dim::Int) = mapslices(argmax, x, dims=dim) .- 1
 
 """
     resample(x::AbstractRaster, scale::AbstractFloat, method=:bilinear)
@@ -243,11 +195,8 @@ Rotate the image `x` by 90 degress.
 
 **Note:** `x` must be a square image.
 """
-rot90(x::AbstractRasterStack) = map(rot90, x)
-rot90(x::AbstractRaster) = Rasters.modify(a -> rot90(a, dims=(dimnum(x,X),dimnum(x,Y))), x)
-function rot90(x::AbstractArray; dims=(1,2))
-    @assert size(x, dims[1]) == size(x, dims[2]) "rot90 only works for square tiles!"
-    return mapslices(rotr90, x, dims=dims)
+function rot90(x::AbstractArray{<:Real,4})
+    return @pipe permutedims(x, (2, 1, 3, 4)) |> reverse(_, dims=2)
 end
 
 function _check_resample_method(method)

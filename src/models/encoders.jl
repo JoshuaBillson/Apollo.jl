@@ -37,90 +37,56 @@ encoder = build_encoder(ResNet50(weights=:ImageNet))
 """
 function build_encoder end
 
-# ResNet18
+# ResNet Encoder
 
-"""
-    ResNet18(;weights=nothing)
-
-Construct a ResNet18 encoder with the specified initial weights.
-
-# Parameters
-- `weights`: Either `:ImageNet` or `nothing`.
-"""
-struct ResNet18{W} <: AbstractEncoder{(64,64,128,256,512)}
-    weights::W
-    ResNet18(;weights=nothing) = new{typeof(weights)}(weights)
+struct ResNet
+    depth::Int
+    weights::Symbol
 end
 
-build_encoder(e::ResNet18) = resnet(18, e.weights)
-
-# ResNet34
-
-"""
-    ResNet34(;weights=nothing)
-
-Construct a ResNet34 encoder with the specified initial weights.
-
-# Parameters
-- `weights`: Either `:ImageNet` or `nothing`.
-"""
-struct ResNet34{W} <: AbstractEncoder{(64,64,128,256,512)}
-    weights::W
-    ResNet34(;weights=nothing) = new{typeof(weights)}(weights)
+function ResNet(;depth=50, weights=:ImageNet)
+    @argcheck depth in (18,34,50,101,152)
+    @argcheck weights in (:Nothing,:ImageNet)
+    return ResNet(depth, weights)
 end
 
-build_encoder(e::ResNet34) = resnet(34, e.weights)
-
-# ResNet50
-
-"""
-    ResNet50(;weights=nothing)
-
-Construct a ResNet50 encoder with the specified initial weights.
-
-# Parameters
-- `weights`: Either `:ImageNet` or `nothing`.
-"""
-struct ResNet50{W} <: AbstractEncoder{(64,256,512,1024,2048)}
-    weights::W
-    ResNet50(;weights=nothing) = new{typeof(weights)}(weights)
+function filters(x::ResNet)
+    @match x.depth begin
+        18 => (64,64,128,256,512)
+        34 => (64,64,128,256,512)
+        50 => (64,256,512,1024,2048)
+        101 => (64,256,512,1024,2048)
+        152 => (64,256,512,1024,2048)
+    end
 end
 
-build_encoder(e::ResNet50) = resnet(50, e.weights)
+function build_encoder(x::ResNet, inchannels::Int)
+    # Validate Channels
+    pattern = (x.weights, inchannels)
+    input = @match pattern begin
+        (:ImageNet, 3) => Metalhead.backbone(Metalhead.ResNet(x.depth, pretrain=true))[1][1:2]
+        (:Nothing, c) => Metalhead.backbone(Metalhead.ResNet(x.depth, inchannels=c))[1][1:2]
+        (:ImageNet, c) => begin
+            @warn "ImageNet only supports 3 channels! Using uninitialized input."
+            Metalhead.backbone(Metalhead.ResNet(x.depth, inchannels=c))[1][1:2]
+        end
+    end
 
-# ResNet101
+    # Construct Backbone
+    backbone = @match x.weights begin
+        :Nothing => Metalhead.backbone(Metalhead.ResNet(x.depth, pretrain=false))[2:end]
+        :ImageNet => Metalhead.backbone(Metalhead.ResNet(x.depth, pretrain=true))[2:end]
+    end
 
-"""
-    ResNet101(;weights=nothing)
-
-Construct a ResNet101 encoder with the specified initial weights.
-
-# Parameters
-- `weights`: Either `:ImageNet` or `nothing`.
-"""
-struct ResNet101{W} <: AbstractEncoder{(64,256,512,1024,2048)}
-    weights::W
-    ResNet101(;weights=nothing) = new{typeof(weights)}(weights)
+    # Build Encoder
+    return (
+        input,
+        Flux.Chain(Flux.MaxPool((2,2)), backbone[1]...), 
+        backbone[2], 
+        backbone[3], 
+        backbone[4], 
+    )
 end
-
-build_encoder(e::ResNet101) = resnet(101, e.weights)
-
-# ResNet152
-
-"""
-    ResNet152(;weights=nothing)
-
-Construct a ResNet152 encoder with the specified initial weights.
-
-# Parameters
-- `weights`: Either `:ImageNet` or `nothing`.
-"""
-struct ResNet152{W} <: AbstractEncoder{(64,256,512,1024,2048)}
-    weights::W
-    ResNet152(;weights=nothing) = new{typeof(weights)}(weights)
-end
-
-build_encoder(e::ResNet152) = resnet(152, e.weights)
 
 # UNet Encoder
 
@@ -135,8 +101,11 @@ end
 
 StandardEncoder(;batch_norm=true) = StandardEncoder(batch_norm)
 
+filters(::StandardEncoder) = (64,128,256,512,1024)
+
 function build_encoder(e::StandardEncoder)
-    Flux.Chain(
+    return (
+        Flux.Chain(ConvBlock((3,3), 3, 64, Flux.relu, batch_norm=e.batch_norm)), 
         Flux.Chain(Flux.MaxPool((2,2)), ConvBlock((3,3), 64, 128, Flux.relu, batch_norm=e.batch_norm)), 
         Flux.Chain(Flux.MaxPool((2,2)), ConvBlock((3,3), 128, 256, Flux.relu, batch_norm=e.batch_norm)), 
         Flux.Chain(Flux.MaxPool((2,2)), ConvBlock((3,3), 256, 512, Flux.relu, batch_norm=e.batch_norm)), 
@@ -144,21 +113,9 @@ function build_encoder(e::StandardEncoder)
     )
 end
 
-# Base ResNet Constructor
-resnet(depth, ::Nothing) = resnet(depth, :nothing)
-function resnet(depth, weights::Symbol)
-    # Construct Backbone
-    backbone = @match weights begin
-        :nothing => Metalhead.ResNet(depth, pretrain=false) |> Metalhead.backbone
-        :ImageNet => Metalhead.ResNet(depth, pretrain=true) |> Metalhead.backbone
-        _ => throw(ArgumentError("Weights must be one of :ImageNet or :nothing!"))
-    end
 
-    # Build Encoder
-    return Flux.Chain(
-        Flux.Chain(Flux.MaxPool((2,2)), backbone[2]...), 
-        backbone[3], 
-        backbone[4], 
-        backbone[5], 
-    )
-end
+struct Identity end
+
+Flux.@layer Identity
+
+(m::Identity)(x) = x

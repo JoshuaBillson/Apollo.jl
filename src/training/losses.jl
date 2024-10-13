@@ -35,70 +35,55 @@ end
 """
 abstract type WeightedLoss <: AbstractLoss end
 
-function (l::AbstractLoss)(m, batch::Tuple)
-    return l(m(batch[1:end-1]...), batch[end])
-end
+(l::AbstractLoss)(m, batch::Tuple) = l(m(batch[1:end-1]...), batch[end])
 
-function (l::WeightedLoss)(m, batch::Tuple)
-    return l(m(batch[1:end-2]...), batch[end-1], batch[end])
-end
+(l::AbstractLoss)(ŷ::AbstractArray, y::AbstractArray) = compute_loss(l, ŷ, y)
+
+(l::WeightedLoss)(m, batch::Tuple) = l(m(batch[1:end-2]...), batch[end-1], batch[end])
+
+(l::WeightedLoss)(ŷ::AbstractArray, y::AbstractArray, w::AbstractArray) = compute_loss(l, ŷ, y, w)
 
 struct CrossEntropy <: AbstractLoss end
 
-(l::CrossEntropy)(ŷ::AbstractArray{<:Real,4}, y::AbstractArray{<:Real,4}) = l(_flatten(ŷ), _flatten(y))
-function (l::CrossEntropy)(ŷ::AbstractArray{<:Real,2}, y::AbstractArray{<:Real,2})
-    return Flux.crossentropy(ŷ, y)
+function compute_loss(l::CrossEntropy, ŷ::AbstractArray{<:Real,4}, y::AbstractArray{<:Real,4})
+    return compute_loss(l, _flatten(ŷ), _flatten(y))
+end
+function compute_loss(::CrossEntropy, ŷ::AbstractArray{T,2}, y::AbstractArray{T,2}) where {T <: Real}
+    return mean(-sum(y .* log.(ŷ .+ _eps(T)); dims=1))
 end
 
 struct BinaryCrossEntropy <: AbstractLoss end
 
-function (l::BinaryCrossEntropy)(ŷ::AbstractArray, y::AbstractArray)
-    return Flux.binarycrossentropy(ŷ, y)
+function compute_loss(::BinaryCrossEntropy, ŷ::AbstractArray{T}, y::AbstractArray{T}) where {T <: Real}
+    return mean(-y .* log.(ŷ .+ _eps(T)) .- (1 .- y) .* log.(1 .- ŷ .+ _eps(T)))
 end
 
 struct WeightedBinaryCrossEntropy <: WeightedLoss end
 
-function (l::WeightedBinaryCrossEntropy)(ŷ::AbstractArray, y::AbstractArray, weights::AbstractArray)
-    l = Flux.binarycrossentropy(ŷ, y, agg=identity)
-    return mean(l .* weights)
+function compute_loss(::WeightedBinaryCrossEntropy, ŷ::AbstractArray{T}, y::AbstractArray{T}, w::AbstractArray{T}) where {T <: Real}
+    return mean(w .* (-y .* log.(ŷ .+ _eps(T)) .- (1 .- y) .* log.(1 .- ŷ .+ _eps(T))))
 end
 
 struct MeanAbsoluteError <: AbstractLoss end
 
-function (l::MeanAbsoluteError)(ŷ::AbstractArray, y::AbstractArray)
-    return mean(abs.(ŷ .- y))
-end
-
-struct WeightedMeanAbsoluteError <: WeightedLoss end
-
-function (l::WeightedMeanAbsoluteError)(ŷ::AbstractArray, y::AbstractArray, weights::AbstractArray)
-    return mean(abs.(ŷ .- y) .* weights)
-end
+compute_loss(::MeanAbsoluteError, ŷ::AbstractArray, y::AbstractArray) = mean(abs.(ŷ .- y))
 
 struct MeanSquaredError <: AbstractLoss end
 
-function (l::MeanSquaredError)(ŷ::AbstractArray, y::AbstractArray)
-    return mean(((ŷ .- y) .^ 2))
-end
-
-struct WeightedMeanSquaredError <: WeightedLoss end
-
-function (l::WeightedMeanSquaredError)(ŷ::AbstractArray, y::AbstractArray, weights::AbstractArray)
-    return mean(((ŷ .- y) .^ 2) .* weights)
-end
+compute_loss(::MeanSquaredError, ŷ::AbstractArray, y::AbstractArray) = mean(((ŷ .- y) .^ 2))
 
 struct BinaryDice <: AbstractLoss end
 
-function (l::BinaryDice)(ŷ::AbstractArray, y::AbstractArray)
-    Flux.dice_coeff_loss(ŷ, y)
-end
+compute_loss(::BinaryDice, ŷ::AbstractArray, y::AbstractArray) = 1 - _dice_score(ŷ, y)
 
 struct MultiClassDice <: AbstractLoss end
 
-(l::MultiClassDice)(ŷ::AbstractArray{<:Real,4}, y::AbstractArray{<:Real,4}) = l(_flatten(ŷ), _flatten(y))
-function (l::MultiClassDice)(ŷ::AbstractArray{<:Real,2}, y::AbstractArray{<:Real,2})
+function compute_loss(l::MultiClassDice, ŷ::AbstractArray{<:Real,4}, y::AbstractArray{<:Real,4})
+    return compute_loss(l, _flatten(ŷ), _flatten(y))
+end
+function compute_loss(::MultiClassDice, ŷ::AbstractArray{<:Real,2}, y::AbstractArray{<:Real,2})
     nclasses = size(y, 1)
-    return mean([Flux.dice_coeff_loss(ŷ[c,:], y[c,:]) for c in 2:nclasses])
+    return mean([1 - _dice_score(ŷ[c,:], y[c,:]) for c in 2:nclasses])
 end
 
 struct MixedLoss{L1<:AbstractLoss,L2<:AbstractLoss,T<:AbstractFloat} <: AbstractLoss
@@ -132,6 +117,9 @@ function _select_obs(x::AbstractArray{<:Real,4}, mask::AbstractArray{<:Real,4})
     return x_flat[:,indices]
 end
 
-function _flatten(x::AbstractArray{<:Real,4})
-    return @pipe permutedims(x, (3, 1, 2, 4)) |> reshape(_, (size(x, 3), :))
+function _dice_score(ŷ::AbstractArray{T}, y::AbstractArray{T}) where {T <: Real}
+    return (2 * sum(ŷ .* y) .+ _eps(T)) / (sum(ŷ .^ 2) + sum(y .^ 2) .+ _eps(T))
 end
+
+_eps(::Type{T}) where {T <: AbstractFloat} = eps(T)
+_eps(::Type{T}) where {T <: Integer} = T(1)

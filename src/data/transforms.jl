@@ -12,31 +12,12 @@ Super type of all random transforms.
 abstract type RandomTransform <: AbstractTransform end
 
 """
-    TransformedView(data, dtype, transform::AbstractTransform).
-
-An iterator that applied the provided `transform` to each batch in data.
-The transform will modify each element according to the specified `dtype`.
-"""
-struct TransformedView{D,DT,T} <: AbstractIterator{D}
-    data::D
-    dtype::DT
-    transform::T
-end
-
-Base.length(x::TransformedView) = length(data(x))
-
-Base.getindex(x::TransformedView, i::Int) = apply(x.transform, x.dtype, x.data[i], rand(1:1000))
-
-"""
     transform(t::AbstractTransform, dtype::DType, x)
     transform(t::AbstractTransform, dtypes::Tuple, x::Tuple)
 
 Apply the transformation `t` to the input `x` with data type `dtype`.
 """
 transform(t::AbstractTransform, dtype, data) = apply(t, dtype, data, rand(1:1000))
-function transform(t::AbstractTransform, dtype, data::AbstractIterator)
-    return TransformedView(data, dtype, t)
-end
 
 """
     apply(t::AbstractTransform, dtype::DType, data, seed)
@@ -97,60 +78,6 @@ OneHot(;precision=Float32, labels=[0,1]) = OneHot(labels, precision)
 apply(t::OneHot, ::SegMask, x, ::Int) = Apollo.onehot(t.precision, x, t.labels)
 
 description(x::OneHot) = "One-hot encode labels."
-
-# Normalize Transform
-
-"""
-    Normalize(μ, σ; dim=3)
-
-Normalize the input array with respect to the specified dimension so that the mean is 0
-and the standard deviation is 1.
-
-# Parameters
-- `μ`: A `Vector` of means for each index in `dim`.
-- `σ`: A `Vector` of standard deviations for each index in `dim`.
-- `dim`: The dimension along which to normalize the input array.
-"""
-struct Normalize <: AbstractTransform
-    dim::Int
-    μ::Vector{Float64}
-    σ::Vector{Float64}
-end
-
-function Normalize(μ, σ; dim=3)
-    return Normalize(dim, Float64.(μ), Float64.(σ))
-end
-
-apply(t::Normalize, ::AbstractImage, x, ::Int) = normalize(x, t.μ, t.σ, dim=t.dim)
-
-description(x::Normalize) = "Normalize bands."
-
-# DeNormalize Transform
-
-"""
-    DeNormalize(μ, σ; dim=3)
-
-Denormalize the input array with respect to the specified dimension. Reverses the
-effect of `normalize`.
-
-# Parameters
-- `μ`: A `Vector` of means for each index in `dim`.
-- `σ`: A `Vector` of standard deviations for each index in `dim`.
-- `dim`: The dimension along which to denormalize the input array.
-"""
-struct DeNormalize <: AbstractTransform
-    dim::Int
-    μ::Vector{Float64}
-    σ::Vector{Float64}
-end
-
-function DeNormalize(μ, σ; dim=3)
-    return DeNormalize(dim, Float64.(μ), Float64.(σ))
-end
-
-apply(t::DeNormalize, ::AbstractImage, x, ::Int) = denormalize(x, t.μ, t.σ, dim=t.dim)
-
-description(x::DeNormalize) = "Denormalize bands."
 
 # Resample Transform
 

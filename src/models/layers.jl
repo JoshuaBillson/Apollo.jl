@@ -9,9 +9,9 @@ A separable convolutional layer consists of a depthwise convolution followed by 
 - `out`: The number of output features.
 - `σ`: The activation function to apply following the 1x1 convolution.
 """
-function SeparableConv(filter, in, out, σ=Flux.relu)
+function SeparableConv(kernel_size::Int, in::Int, out::Int, σ=Flux.relu)
     Flux.Chain(
-        Flux.DepthwiseConv(filter, in=>in, pad=Flux.SamePad()), 
+        Flux.DepthwiseConv((kernel_size, kernel_size), in=>in, pad=Flux.SamePad()), 
         Flux.Conv((1,1), in=>out, σ, pad=Flux.SamePad())
     )
 end
@@ -29,25 +29,25 @@ A block of convolutional layers with optional batch normalization.
 - `depth`: The number of successive convolutions in the block.
 - `batch_norm`: Applies batch normalization after each convolution if `true`.
 """
-function ConvBlock(filter, in, out, σ; depth=2, batch_norm=true)
+function ConvBlock(kernel_size::Int, in::Int, out::Int, σ; depth=2, batch_norm=true)
     return Flux.Chain(
         [ifelse(
             i == 1, 
-            Conv(filter, in, out, σ, batch_norm=batch_norm), 
-            Conv(filter, out, out, σ, batch_norm=batch_norm)
+            Conv(kernel_size, in, out, σ, batch_norm=batch_norm), 
+            Conv(kernel_size, out, out, σ, batch_norm=batch_norm)
             ) 
         for i in 1:depth]...
     )
 end
 
-function Conv(filter, in, out, σ; batch_norm=true)
+function Conv(kernel_size::Int, in::Int, out::Int, σ; batch_norm=true, groups=1, dilation=1)
     if batch_norm
         return Flux.Chain(
-            Flux.Conv(filter, in=>out, pad=Flux.SamePad()),
+            Flux.Conv((kernel_size, kernel_size), in=>out, pad=Flux.SamePad(), groups=groups, dilation=dilation),
             Flux.BatchNorm(out, σ), 
         )
     else
-        return Flux.Conv(filter, in=>out, σ, pad=Flux.SamePad())
+        return Flux.Conv((kernel_size, kernel_size), in=>out, σ, pad=Flux.SamePad())
     end
 end
 
