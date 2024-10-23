@@ -98,8 +98,7 @@ function (m::LSTM)(x::AbstractArray{<:AbstractFloat,5})
 end
 
 """
-    MultiHeadSelfAttention(planes::Integer, nheads::Integer = 8; qkv_bias::Bool = false, 
-                attn_dropout_prob = 0., proj_dropout_prob = 0.)
+    MultiHeadSelfAttention(inplanes::Int, outplanes::Int; nheads::Int = 8, qkv_bias::Bool = false, attn_dropout_prob = 0.0, proj_dropout_prob = 0.0)
 
 Multi-head self-attention layer.
 
@@ -128,15 +127,19 @@ function MultiHeadSelfAttention(inplanes::Int, outplanes::Int; nheads::Int = 8, 
 end
 
 function (m::MultiHeadSelfAttention)(x::AbstractArray{<:Number, 3})
-    qkv = m.qkv_layer(x)
-    q, k, v = Flux.chunk(qkv, 3, dims = 1)
+    C, L, N = size(x)
+    qkv = reshape(m.qkv_layer(x), (:, 3, L, N))
+    q = reshape(qkv[:,1:1,:,:], (:,L,N))
+    k = reshape(qkv[:,2:2,:,:], (:,L,N))
+    v = reshape(qkv[:,3:3,:,:], (:,L,N))
+    #q, k, v = Flux.chunk(qkv, 3, dims = 1)
     y, α = Flux.NNlib.dot_product_attention(q, k, v; m.nheads, fdrop = m.attn_drop)
     y = m.projection(y)
     return y
 end
 
 struct WindowedAttention{A}
-    window_size::Integer
+    window_size::Int
     att::A
 end
 Flux.@layer :expand WindowedAttention
@@ -152,12 +155,22 @@ function WindowedAttention(inplanes::Int, outplanes::Int, window_size::Int; nhea
 end
 
 function (m::WindowedAttention)(x::AbstractArray{<:Number, 3})
-    C, L, B = size(x)
-    @pipe window_partition(x, m.window_size) |> img2seq |> m.att |> seq2img |> window_reverse(_, m.window_size, W, H)
-end
-function (m::WindowedAttention)(x::AbstractArray{<:Number, 4})
-    W, H, C, B = size(x)
-    @pipe window_partition(x, m.window_size) |> img2seq |> m.att |> seq2img |> window_reverse(_, m.window_size, W, H)
+    # Get Tensor Dimensions
+    C, L, N = size(x)
+    W = round(Int, sqrt(L))
+
+    # Partition Into Windows
+    windows = @pipe reshape(x, (C,W,W,N)) |> window_partition(_, m.window_size)
+
+    # Compute Attention
+    att = @pipe reshape(windows, (C,m.window_size^2,:)) |> m.att
+
+    # Reverse Windows
+    C = size(att, 1)
+    y = @pipe reshape(att, (C,m.window_size,m.window_size,:)) |> window_reverse(_, m.window_size, W, W)
+
+    # Return Result
+    return reshape(y, (C,:,N))
 end
 
 struct WindowTransformerBlock{A,M,C,N}
@@ -167,14 +180,14 @@ struct WindowTransformerBlock{A,M,C,N}
     norm1::N
     norm2::N
     norm3::N
-    window_size::Integer
+    window_size::Int
 end
 
 Flux.@layer :expand WindowTransformerBlock
 
 function WindowTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bias=true, drop=0.0, attn_drop=0.0)
     WindowTransformerBlock(
-        MultiHeadSelfAttention(dim, dim; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_drop, proj_dropout_prob=drop),
+        WindowedAttention(dim, dim, 7; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_drop, proj_dropout_prob=drop),
         MLP(dim, dim*mlp_ratio, dim, drop), 
         Flux.Conv((7,7), dim => dim, groups=dim, pad=Flux.SamePad()), 
         Flux.LayerNorm(dim), 
@@ -185,23 +198,19 @@ function WindowTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bia
 end
 
 function (m::WindowTransformerBlock)(x)
-    C, W, H, N = size(x)
-
+    # First Block
     residual = x
-    x = @pipe layer_norm(x, m.norm1) |> 
-    window_partition(_, m.window_size) |> 
-    attention(_, m.att) |>
-    window_reverse(_, m.window_size, W, H)
+    x = residual .+ m.att(m.norm1(x))
 
-    x = layer_norm(x .+ residual, m.norm2)
+    # Second Block
+    residual = m.norm2(x)
+    x = @pipe seq2img(x) |> m.conv |> img2seq
+    x = residual .+ x
 
+    # Third Block
     residual = x
-    x = @pipe permutedims(x, (2,3,1,4)) |> m.conv |> permutedims(_, (3,1,2,4))
-    x = x .+ residual
-
-    x = x .+ m.mlp(layer_norm(x, m.norm3))
-
-    return x
+    x = m.norm3(x) |> m.mlp
+    return residual .+ x
 end
 
 function layer_norm(x, norm)
@@ -218,7 +227,7 @@ function WinTransformer(;depths=[2,2,6,2], embed_dim=96, nheads=[3,6,12,24], ncl
     dims = [embed_dim * 2^(i-1) for i in eachindex(depths)]
     Flux.Chain(
         Flux.Conv((4,4), 3=>embed_dim, stride=4, pad=Flux.SamePad()), 
-        x -> permutedims(x, (3,1,2,4)),
+        img2seq, 
         [Apollo.WindowTransformerBlock(dims[1], nheads[1]) for _ in 1:depths[1]]...,
         Apollo.PatchMerging(dims[1]),
         [Apollo.WindowTransformerBlock(dims[2], nheads[2]) for _ in 1:depths[2]]..., 
@@ -226,7 +235,7 @@ function WinTransformer(;depths=[2,2,6,2], embed_dim=96, nheads=[3,6,12,24], ncl
         [Apollo.WindowTransformerBlock(dims[3], nheads[3]) for _ in 1:depths[3]]..., 
         Apollo.PatchMerging(dims[3]), 
         [Apollo.WindowTransformerBlock(dims[4], nheads[4]) for _ in 1:depths[4]]..., 
-        x -> permutedims(x, (2,3,1,4)),
+        seq2img, 
         Flux.AdaptiveMeanPool((1,1)), 
         Flux.MLUtils.flatten, 
         Flux.Dense(dims[4] => nclasses)
@@ -271,6 +280,11 @@ function window_reverse(x, window_size, W, H)
     reshape(_, (C,W,H,:))
 end
 
+function merge_patches(x::AbstractArray{<:Number,3})
+    C, L, N = size(x)
+    W = round(Int, sqrt(L))
+    @pipe reshape(x, (C,W,W,N)) |> merge_patches |> reshape(_, (C*4,:,N))
+end
 function merge_patches(x::AbstractArray{<:Number,4})
     x1 = @view x[:,1:2:end,1:2:end,:]
     x2 = @view x[:,2:2:end,1:2:end,:]
