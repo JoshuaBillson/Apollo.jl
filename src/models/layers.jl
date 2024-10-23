@@ -185,34 +185,40 @@ function WindowTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bia
 end
 
 function (m::WindowTransformerBlock)(x)
-    W, H, C, N = size(x)
-
-    residual = @pipe permutedims(x, (3,1,2,4)) |> reshape(_, (C,W*H,N))
-    x = @pipe residual |> 
-    m.norm1 |> 
-    reshape(_, (C,W,H,N)) |>
-    window_partition(_, m.window_size) |> 
-    reshape(_, (C,m.window_size*m.window_size,:)) |> 
-    m.att |>
-    reshape(_, (C,m.window_size,m.window_size,:)) |>
-    window_reverse(_, m.window_size, W, H) |>
-    reshape(_, (C,W*H,:))
-
-    x = m.norm2(x .+ residual)
+    C, W, H, N = size(x)
 
     residual = x
-    x = @pipe reshape(x, (C,W,H,N)) |> permutedims(_, (2,3,1,4)) |> m.conv |> permutedims(_, (3,1,2,4)) |> reshape(_, (C,W*H,N))
+    x = @pipe layer_norm(x, m.norm1) |> 
+    window_partition(_, m.window_size) |> 
+    attention(_, m.att) |>
+    window_reverse(_, m.window_size, W, H)
+
+    x = layer_norm(x .+ residual, m.norm2)
+
+    residual = x
+    x = @pipe permutedims(x, (2,3,1,4)) |> m.conv |> permutedims(_, (3,1,2,4))
     x = x .+ residual
 
-    x = x .+ m.mlp(m.norm3(x))
+    x = x .+ m.mlp(layer_norm(x, m.norm3))
 
-    return @pipe reshape(x, (C,W,H,:)) |> permutedims(_, (2,3,1,4))
+    return x
+end
+
+function layer_norm(x, norm)
+    C, W, H, N = size(x)
+    @pipe reshape(x, (C,W*H,N)) |> norm |> reshape(_, (C,W,H,N))
+end
+
+function attention(x, att)
+    C, W, H, N = size(x)
+    @pipe reshape(x, (C,W*H,N)) |> att |> reshape(_, (C,W,H,N))
 end
 
 function WinTransformer(;depths=[2,2,6,2], embed_dim=96, nheads=[3,6,12,24], nclasses=1000)
     dims = [embed_dim * 2^(i-1) for i in eachindex(depths)]
     Flux.Chain(
         Flux.Conv((4,4), 3=>embed_dim, stride=4, pad=Flux.SamePad()), 
+        x -> permutedims(x, (3,1,2,4)),
         [Apollo.WindowTransformerBlock(dims[1], nheads[1]) for _ in 1:depths[1]]...,
         Apollo.PatchMerging(dims[1]),
         [Apollo.WindowTransformerBlock(dims[2], nheads[2]) for _ in 1:depths[2]]..., 
@@ -220,6 +226,7 @@ function WinTransformer(;depths=[2,2,6,2], embed_dim=96, nheads=[3,6,12,24], ncl
         [Apollo.WindowTransformerBlock(dims[3], nheads[3]) for _ in 1:depths[3]]..., 
         Apollo.PatchMerging(dims[3]), 
         [Apollo.WindowTransformerBlock(dims[4], nheads[4]) for _ in 1:depths[4]]..., 
+        x -> permutedims(x, (2,3,1,4)),
         Flux.AdaptiveMeanPool((1,1)), 
         Flux.MLUtils.flatten, 
         Flux.Dense(dims[4] => nclasses)
@@ -238,10 +245,8 @@ end
 function PatchMerging(dims::Int)
     Flux.Chain(
         merge_patches, 
-        x -> permutedims(x, (3, 1, 2, 4)), 
         Flux.LayerNorm(4*dims), 
         Flux.Dense(dims*4=>dims*2, bias=false), 
-        x -> permutedims(x, (2, 3, 1, 4)), 
     )
 end
 
@@ -267,9 +272,9 @@ function window_reverse(x, window_size, W, H)
 end
 
 function merge_patches(x::AbstractArray{<:Number,4})
-    x1 = x[1:2:end,1:2:end,:,:]
-    x2 = x[2:2:end,1:2:end,:,:]
-    x3 = x[1:2:end,2:2:end,:,:]
-    x4 = x[2:2:end,2:2:end,:,:]
-    return cat(x1, x2, x3, x4, dims=3)
+    x1 = @view x[:,1:2:end,1:2:end,:]
+    x2 = @view x[:,2:2:end,1:2:end,:]
+    x3 = @view x[:,1:2:end,2:2:end,:]
+    x4 = @view x[:,2:2:end,2:2:end,:]
+    return cat(x1, x2, x3, x4, dims=1)
 end
