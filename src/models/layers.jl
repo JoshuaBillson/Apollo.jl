@@ -157,20 +157,17 @@ end
 function (m::WindowedAttention)(x::AbstractArray{<:Number, 3})
     # Get Tensor Dimensions
     C, L, N = size(x)
-    W = round(Int, sqrt(L))
 
-    # Partition Into Windows
-    windows = @pipe reshape(x, (C,W,W,N)) |> window_partition(_, m.window_size)
+    # Partition Into Windows (CxW*WxN)
+    windows = window_partition(x, m.window_size)
 
     # Compute Attention
-    att = @pipe reshape(windows, (C,m.window_size^2,:)) |> m.att
+    att = m.att(windows)
 
     # Reverse Windows
     C = size(att, 1)
-    y = @pipe reshape(att, (C,m.window_size,m.window_size,:)) |> window_reverse(_, m.window_size, W, W)
-
-    # Return Result
-    return reshape(y, (C,:,N))
+    W = round(Int, sqrt(L))
+    return @pipe window_reverse(att, m.window_size, W, W) |> reshape(_, (C,:,N))
 end
 
 struct WindowTransformerBlock{A,M,C,N}
@@ -194,6 +191,34 @@ function WindowTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bia
         Flux.LayerNorm(dim), 
         Flux.LayerNorm(dim), 
         window_size
+    )
+end
+
+function WinTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bias=true, drop=0.0, attn_drop=0.0)
+    Flux.Chain(
+        Flux.SkipConnection(
+            Flux.Chain(
+                WindowedAttention(dim, dim, window_size; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_drop, proj_dropout_prob=drop),
+                Flux.LayerNorm(dim)
+            ), 
+            +
+        ), 
+        Flux.LayerNorm(dim), 
+        Flux.SkipConnection(
+            Flux.Chain(
+                seq2img, 
+                Flux.Conv((7,7), dim => dim, groups=dim, pad=Flux.SamePad()), 
+                img2seq
+            ), 
+            +
+        ), 
+        Flux.SkipConnection(
+            Flux.Chain(
+                Flux.LayerNorm(dim), 
+                MLP(dim, dim*mlp_ratio, dim, drop), 
+            ), 
+            +
+        )
     )
 end
 
@@ -238,6 +263,7 @@ function WinTransformer(;depths=[2,2,6,2], embed_dim=96, nheads=[3,6,12,24], ncl
         seq2img, 
         Flux.AdaptiveMeanPool((1,1)), 
         Flux.MLUtils.flatten, 
+        Flux.LayerNorm(dims[4]),
         Flux.Dense(dims[4] => nclasses)
     )
 end
@@ -266,7 +292,12 @@ function seq2img(x)
     @pipe permutedims(x, (2, 1, 3)) |> reshape(_, (s, s, size(x, 1), size(x, 3)))
 end
 
-function window_partition(x, window_size)
+function window_partition(x::AbstractArray{<:Number,3}, window_size)
+    C, L, B = size(x)
+    S = round(Int, sqrt(L))
+    @pipe reshape(x, (C,S,S,B)) |> window_partition(_, window_size) |> reshape(_, (C,window_size^2,:))
+end
+function window_partition(x::AbstractArray{<:Number,4}, window_size)
     C, W, H, B = size(x)
     @pipe reshape(x, (C, window_size, W ÷ window_size, window_size, H ÷ window_size, B)) |> 
     permutedims(_, (1,2,4,3,5,6)) |> 
