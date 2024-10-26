@@ -207,7 +207,7 @@ function WinTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bias=t
         Flux.SkipConnection(
             Flux.Chain(
                 seq2img, 
-                Flux.Conv((7,7), dim => dim, groups=dim, pad=Flux.SamePad()), 
+                Flux.Conv((3,3), dim => dim, groups=1, dilation=3, pad=Flux.SamePad()), 
                 img2seq
             ), 
             +
