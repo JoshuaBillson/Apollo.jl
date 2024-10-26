@@ -127,12 +127,13 @@ function MultiHeadSelfAttention(inplanes::Int, outplanes::Int; nheads::Int = 8, 
 end
 
 function (m::MultiHeadSelfAttention)(x::AbstractArray{<:Number, 3})
-    C, L, N = size(x)
-    qkv = reshape(m.qkv_layer(x), (:, 3, L, N))
-    q = reshape(qkv[:,1:1,:,:], (:,L,N))
-    k = reshape(qkv[:,2:2,:,:], (:,L,N))
-    v = reshape(qkv[:,3:3,:,:], (:,L,N))
-    #q, k, v = Flux.chunk(qkv, 3, dims = 1)
+    qkv = m.qkv_layer(x)
+    #C, L, N = size(x)
+    #qkv = reshape(m.qkv_layer(x), (:, 3, L, N))
+    #q = reshape(qkv[:,1:1,:,:], (:,L,N))
+    #k = reshape(qkv[:,2:2,:,:], (:,L,N))
+    #v = reshape(qkv[:,3:3,:,:], (:,L,N))
+    q, k, v = Flux.chunk(qkv, 3, dims = 1)
     y, α = Flux.NNlib.dot_product_attention(q, k, v; m.nheads, fdrop = m.attn_drop)
     y = m.projection(y)
     return y
@@ -170,6 +171,7 @@ function (m::WindowedAttention)(x::AbstractArray{<:Number, 3})
     return @pipe window_reverse(att, m.window_size, W, W) |> reshape(_, (C,:,N))
 end
 
+"""
 struct WindowTransformerBlock{A,M,C,N}
     att::A
     mlp::M
@@ -193,13 +195,14 @@ function WindowTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bia
         window_size
     )
 end
+"""
 
-function WinTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bias=true, drop=0.0, attn_drop=0.0)
+function WinTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bias=true, drop=0.1, attn_drop=0.1)
     Flux.Chain(
         Flux.SkipConnection(
             Flux.Chain(
+                Flux.LayerNorm(dim), 
                 WindowedAttention(dim, dim, window_size; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_drop, proj_dropout_prob=drop),
-                Flux.LayerNorm(dim)
             ), 
             +
         ), 
@@ -222,6 +225,7 @@ function WinTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bias=t
     )
 end
 
+"""
 function (m::WindowTransformerBlock)(x)
     # First Block
     residual = x
@@ -237,21 +241,12 @@ function (m::WindowTransformerBlock)(x)
     x = m.norm3(x) |> m.mlp
     return residual .+ x
 end
-
-function layer_norm(x, norm)
-    C, W, H, N = size(x)
-    @pipe reshape(x, (C,W*H,N)) |> norm |> reshape(_, (C,W,H,N))
-end
-
-function attention(x, att)
-    C, W, H, N = size(x)
-    @pipe reshape(x, (C,W*H,N)) |> att |> reshape(_, (C,W,H,N))
-end
-
+"""
 function WinTransformer(;depths=[2,2,6,2], embed_dim=96, nheads=[3,6,12,24], nclasses=1000)
     dims = [embed_dim * 2^(i-1) for i in eachindex(depths)]
     Flux.Chain(
         Flux.Conv((4,4), 3=>embed_dim, stride=4, pad=Flux.SamePad()), 
+        Flux.Dropout(0.1), 
         img2seq, 
         [Apollo.WinTransformerBlock(dims[1], nheads[1]) for _ in 1:depths[1]]...,
         Apollo.PatchMerging(dims[1]),
