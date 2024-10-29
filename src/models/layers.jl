@@ -139,19 +139,41 @@ function (m::MultiHeadSelfAttention)(x::AbstractArray{<:Number, 3})
     return y
 end
 
-struct WindowedAttention{A}
+struct WindowedAttention{P,Q,R,B}
+    nheads::Int
     window_size::Int
-    att::A
+    relative_position_index::Matrix{Int}
+    relative_position_bias::B
+    qkv_layer::P
+    attn_drop::Q
+    projection::R
 end
-Flux.@layer :expand WindowedAttention
+
+Flux.@layer :expand WindowedAttention trainable=(relative_position_bias, qkv_layer, attn_drop, projection)
 
 function WindowedAttention(inplanes::Int, outplanes::Int, window_size::Int; nheads::Int = 8, qkv_bias::Bool = false, attn_dropout_prob = 0.0, proj_dropout_prob = 0.0)
     @assert outplanes % nheads==0 "planes should be divisible by nheads"
+
+    # Initialize Layers
+    qkv_layer = Flux.Dense(inplanes, outplanes * 3; bias = qkv_bias)
+    attn_drop = Flux.Dropout(attn_dropout_prob)
+    proj = Flux.Chain(Flux.Dense(outplanes, outplanes), Flux.Dropout(proj_dropout_prob))
+
+    # Initialize Positional Embedding
+    relative_position_bias = zeros(Float32, nheads, (2*window_size-1)*(2*window_size-1))
+
+    # Compute Relative Position Indices
+    relative_position_index = compute_relative_position_index((window_size,window_size))
+
+    # Construct Layer
     return WindowedAttention(
+        nheads,
         window_size, 
-        MultiHeadSelfAttention(
-            inplanes, outplanes; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_dropout_prob, proj_dropout_prob=proj_dropout_prob
-        )
+        relative_position_index, 
+        relative_position_bias,
+        qkv_layer, 
+        attn_drop, 
+        proj
     )
 end
 
@@ -162,13 +184,23 @@ function (m::WindowedAttention)(x::AbstractArray{<:Number, 3})
     # Partition Into Windows (CxW*WxN)
     windows = window_partition(x, m.window_size)
 
+    # Get Relative Position Bias
+    relative_position_index = reshape(m.relative_position_index, :)
+    relative_position_bias = m.relative_position_bias[:,relative_position_index]
+    relative_position_bias = reshape(relative_position_bias, (:, m.window_size^2, m.window_size^2)) # [nH x Ww*Wh x Ww*Wh]
+    relative_position_bias = permutedims(relative_position_bias, (2,3,1)) # [Ww*Wh x Ww*Wh x nH]
+    relative_position_bias = Flux.unsqueeze(relative_position_bias, dims=4) # [Ww*Wh x Ww*Wh x nH x 1]
+
     # Compute Attention
-    att = m.att(windows)
+    qkv = m.qkv_layer(windows)
+    q, k, v = Flux.chunk(qkv, 3, dims = 1)
+    y, α = Flux.NNlib.dot_product_attention(q, k, v, relative_position_bias; m.nheads, fdrop = m.attn_drop)
+    y = m.projection(y)
 
     # Reverse Windows
-    C = size(att, 1)
+    C = size(y, 1)
     W = round(Int, sqrt(L))
-    return @pipe window_reverse(att, m.window_size, W, W) |> reshape(_, (C,:,N))
+    return @pipe window_reverse(y, m.window_size, W, W) |> reshape(_, (C,:,N))
 end
 
 """
@@ -308,8 +340,8 @@ end
 
 function merge_patches(x::AbstractArray{<:Number,3})
     C, L, N = size(x)
-    W = round(Int, sqrt(L))
-    @pipe reshape(x, (C,W,W,N)) |> merge_patches |> reshape(_, (C*4,:,N))
+    S = round(Int, sqrt(L))
+    @pipe reshape(x, (C,S,S,N)) |> merge_patches |> reshape(_, (C*4,:,N))
 end
 function merge_patches(x::AbstractArray{<:Number,4})
     x1 = @view x[:,1:2:end,1:2:end,:]
@@ -317,4 +349,60 @@ function merge_patches(x::AbstractArray{<:Number,4})
     x3 = @view x[:,1:2:end,2:2:end,:]
     x4 = @view x[:,2:2:end,2:2:end,:]
     return cat(x1, x2, x3, x4, dims=1)
+end
+
+function compute_relative_position_index(window_size)
+    # Generate coordinates
+    Wh, Ww = window_size
+    coords_h = collect(0:Wh-1)
+    coords_w = collect(0:Ww-1)
+    coords = hcat(map(collect, Iterators.product(coords_h, coords_w))...)  # Shape: 2, Wh*Ww
+
+    # Flatten coordinates
+    coords_flatten = reshape(reverse(coords, dims=1), 2, Wh * Ww)
+
+    # Compute relative coordinates
+    relative_coords = Flux.unsqueeze(coords_flatten, 3) .- Flux.unsqueeze(coords_flatten, 2)
+    relative_coords = permutedims(relative_coords, (2,3,1))
+    relative_coords[:, :, 1] .+= Wh - 1  # shift to start from 0
+    relative_coords[:, :, 2] .+= Ww - 1
+    relative_coords[:, :, 1] .*= 2 * Ww - 1
+
+    # Calculate relative position index
+    relative_position_index = dropdims(sum(relative_coords, dims=3), dims=3)
+    relative_position_index = relative_position_index .+ 1  # adjust for 1-based indexing
+    return permutedims(relative_position_index, (2,1))  # adjust for column-major ordering
+end
+
+function dot_product_attention_scores(q::AbstractArray{T,4}, k::AbstractArray{T,4}, bias=nothing;
+    fdrop=identity, mask=nothing) where T
+
+    # The following permutedims and batched_mul are equivalent to
+    # @tullio logits[j, i, h, b] := q[d, h, i, b] * k[d, h, j, b] / √T(qk_dim)
+    kt = permutedims(k, (3, 1, 2, 4))
+    qt = permutedims(q, (1, 3, 2, 4)) ./ √T(size(q, 1))
+    logits = Flux.batched_mul(kt, qt) # [logits] = [kv_len, q_len, nheads, batch_size]
+
+    logits = Flux.NNlib.apply_attn_bias(logits, bias)
+    logits = Flux.NNlib.apply_attn_mask(logits, mask)
+
+    α = Flux.softmax(logits, dims=1)
+    return fdrop(α)
+end
+
+function dot_product_attention(q::AbstractArray{T,4}, k::AbstractArray{T,4}, v::AbstractArray{T,4}, bias, fdrop, mask) where T
+    # [q] = [qk_dim ÷ nheads, nheads, q_len, batch_size]
+    # [k] = [qk_dim ÷ nheads, nheads, kv_len, batch_size]
+    # [v] = [v_dim ÷ nheads, nheads, kv_len, batch_size]
+
+    α = dot_product_attention_scores(q, k, bias; fdrop, mask)
+    # [α] = [kv_len, q_len, nheads, batch_size]
+
+    # The following permutedims and batched_mul are equivalent to
+    # @tullio x[d, h, i, b] := α[j, i, h, b] * v[d, h, j, b]
+    vt = permutedims(v, (1, 3, 2, 4))
+    x = Flux.NNlib.batched_mul(vt, α)
+    x = permutedims(x, (1, 3, 2, 4))
+    # [x] = [kv_dim ÷ nheads, nheads, q_len, batch_size]
+    return x, α
 end
