@@ -139,10 +139,10 @@ function (m::MultiHeadSelfAttention)(x::AbstractArray{<:Number, 3})
     return y
 end
 
-struct WindowedAttention{P,Q,R,B}
+struct WindowedAttention{P,Q,R,B,I}
     nheads::Int
     window_size::Int
-    relative_position_index::Matrix{Int}
+    relative_position_index::I
     relative_position_bias::B
     qkv_layer::P
     attn_drop::Q
