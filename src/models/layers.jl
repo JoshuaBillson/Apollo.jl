@@ -139,20 +139,23 @@ function (m::MultiHeadSelfAttention)(x::AbstractArray{<:Number, 3})
     return y
 end
 
-struct WindowedAttention{P,Q,R,B,I}
+struct WindowedAttention{P,R,D,M,B,I}
     nheads::Int
     window_size::Int
+    window_shift::Int
     relative_position_index::I
     relative_position_bias::B
+    attention_mask::M
     qkv_layer::P
-    attn_drop::Q
+    attn_drop::D
     projection::R
 end
 
 Flux.@layer :expand WindowedAttention trainable=(relative_position_bias, qkv_layer, attn_drop, projection)
 
-function WindowedAttention(inplanes::Int, outplanes::Int, window_size::Int; nheads::Int = 8, qkv_bias::Bool = false, attn_dropout_prob = 0.0, proj_dropout_prob = 0.0)
+function WindowedAttention(inplanes::Int, outplanes::Int, feature_size::Int, window_size::Int; nheads::Int = 8, qkv_bias::Bool = false, attn_dropout_prob = 0.0, proj_dropout_prob = 0.0, window_shift=0)
     @assert outplanes % nheads==0 "planes should be divisible by nheads"
+    @assert window_shift >= 0 "window shift must be an integer greater than or equal to zero"
 
     # Initialize Layers
     qkv_layer = Flux.Dense(inplanes, outplanes * 3; bias = qkv_bias)
@@ -165,12 +168,17 @@ function WindowedAttention(inplanes::Int, outplanes::Int, window_size::Int; nhea
     # Compute Relative Position Indices
     relative_position_index = compute_relative_position_index((window_size,window_size))
 
+    # Compute Attention Mask for Shifted Windows
+    attention_mask = window_shift > 0 ? compute_attention_mask(window_size, (feature_size, feature_size)) : nothing
+
     # Construct Layer
     return WindowedAttention(
         nheads,
         window_size, 
+        window_shift,
         relative_position_index, 
         relative_position_bias,
+        attention_mask,
         qkv_layer, 
         attn_drop, 
         proj
@@ -180,9 +188,15 @@ end
 function (m::WindowedAttention)(x::AbstractArray{<:Number, 3})
     # Get Tensor Dimensions
     C, L, N = size(x)
+    W = round(Int, sqrt(L))
 
     # Partition Into Windows (CxW*WxN)
-    windows = window_partition(x, m.window_size)
+    windows = if m.window_shift > 0
+        shifted = circshift(reshape(x, (C,W,W,N)), (0,-m.window_shift,-m.window_shift,0))
+        window_partition(reshape(shifted, (C,L,N)), m.window_size)
+    else
+        window_partition(x, m.window_size)
+    end
 
     # Get Relative Position Bias
     relative_position_index = reshape(m.relative_position_index, :)
@@ -191,16 +205,29 @@ function (m::WindowedAttention)(x::AbstractArray{<:Number, 3})
     relative_position_bias = permutedims(relative_position_bias, (2,3,1)) # [Ww*Wh x Ww*Wh x nH]
     relative_position_bias = Flux.unsqueeze(relative_position_bias, dims=4) # [Ww*Wh x Ww*Wh x nH x 1]
 
+    # Get Attention Mask
+    attn_mask = nothing
+    if !isnothing(m.attention_mask)
+        nW = size(m.attention_mask, 3)
+        wL = size(m.attention_mask, 1)
+        attn_mask = Flux.zeros_like(m.attention_mask, Bool, (wL,wL,m.nheads,nW,N)) .| reshape(m.attention_mask, (wL,wL,1,nW,1))
+        attn_mask = reshape(attn_mask, (wL,wL,m.nheads,:))
+    end
+
     # Compute Attention
     qkv = m.qkv_layer(windows)
     q, k, v = Flux.chunk(qkv, 3, dims = 1)
-    y, α = Flux.NNlib.dot_product_attention(q, k, v, relative_position_bias; m.nheads, fdrop = m.attn_drop)
+    y, α = Flux.NNlib.dot_product_attention(q, k, v, relative_position_bias; nheads=m.nheads, fdrop=m.attn_drop, mask=attn_mask)
     y = m.projection(y)
 
     # Reverse Windows
     C = size(y, 1)
-    W = round(Int, sqrt(L))
-    return @pipe window_reverse(y, m.window_size, W, W) |> reshape(_, (C,:,N))
+    if m.window_shift > 0
+        shifted = circshift(reshape(y, (C,W,W,N)), (0,m.window_shift,m.window_shift,0))
+        return @pipe window_reverse(shifted, m.window_size, W, W) |> reshape(_, (C,:,N))
+    else
+        return @pipe window_reverse(y, m.window_size, W, W) |> reshape(_, (C,:,N))
+    end
 end
 
 """
@@ -405,4 +432,24 @@ function dot_product_attention(q::AbstractArray{T,4}, k::AbstractArray{T,4}, v::
     x = permutedims(x, (1, 3, 2, 4))
     # [x] = [kv_dim ÷ nheads, nheads, q_len, batch_size]
     return x, α
+end
+
+function compute_attention_mask(window_size::Int, feature_size::Tuple{Int,Int})
+    W, H = feature_size
+    shift_size = window_size ÷ 2
+    img_mask = zeros(Float32, 1, W, H, 1)
+    w_slices = [1:(W-window_size), (W-window_size+1):(W-shift_size), (W-shift_size+1):W]
+    h_slices = [1:(H-window_size), (H-window_size+1):(H-shift_size), (H-shift_size+1):H]
+    cnt = 0
+    for w in w_slices
+        for h in h_slices
+            img_mask[:, w, h, :] .= cnt
+            cnt += 1
+        end
+    end
+
+    mask_windows = window_partition(img_mask, window_size)  # 1, window_size, window_size, nW
+    mask_windows = reshape(mask_windows, (window_size^2, :))  # window_size * window_size, nW
+    attn_mask = Flux.unsqueeze(mask_windows, dims=2) .- Flux.unsqueeze(mask_windows, dims=1)
+    return attn_mask .== 0
 end
