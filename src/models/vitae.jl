@@ -2,10 +2,12 @@ function PRM(kernel_size, in_features, embedding, stride, dilations)
     kernel = (kernel_size, kernel_size)
     filters = in_features => embedding
     Flux.Parallel(
-        (x...) -> cat(x..., dims=3), 
+        _cat_prm,
         [Flux.Conv(kernel, filters, Flux.gelu, stride=stride, pad=Flux.SamePad(), dilation=d) for d in dilations]...
     )
 end
+
+_cat_prm(x...) = cat(x..., dims=3)
 
 function PCM(in_dims, hidden_dims, out_dims, downsample, groups)
     strides = [(downsample - 2 * i) >= 0 ? 2 : 1 for i in 1:3]
@@ -18,22 +20,21 @@ function PCM(in_dims, hidden_dims, out_dims, downsample, groups)
     )
 end
 
-function NormalPCM(in_dims, hidden_dims, out_dims, downsample, groups)
-    strides = [(downsample - 2 * i) >= 0 ? 2 : 1 for i in 1:3]
+function NormalPCM(in_dims, hidden_dims, out_dims, groups)
     Flux.Chain(
-        Flux.Conv((3,3), in_dims => hidden_dims, pad=Flux.SamePad(), groups=groups, stride=strides[1]), 
+        Flux.Conv((3,3), in_dims => hidden_dims, pad=Flux.SamePad(), groups=groups), 
         Flux.BatchNorm(hidden_dims, Flux.swish),
-        Flux.Conv((3,3), hidden_dims => out_dims, pad=Flux.SamePad(), groups=groups, stride=strides[2]), 
+        Flux.Conv((3,3), hidden_dims => out_dims, pad=Flux.SamePad(), groups=groups), 
         Flux.BatchNorm(out_dims, Flux.swish), 
-        Flux.Conv((3,3), out_dims => out_dims, pad=Flux.SamePad(), groups=groups, stride=strides[3]), 
+        Flux.Conv((3,3), out_dims => out_dims, pad=Flux.SamePad(), groups=groups), 
     )
 end
 
 function AttentionLayer(in_planes, out_planes; nheads=1, qkv_bias=false, attn_dropout_prob=0.0, proj_dropout_prob=0.0, windows=false)
     if windows
-        WindowedAttention(in_planes, out_planes, 7; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_dropout_prob, proj_dropout_prob=proj_dropout_prob)
+        WindowedAttention(in_planes, out_planes, 224, 7; nheads, qkv_bias, attn_dropout_prob, proj_dropout_prob)
     else
-        MultiHeadSelfAttention(in_planes, out_planes; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_dropout_prob, proj_dropout_prob=proj_dropout_prob)
+        MultiHeadSelfAttention(in_planes, out_planes; nheads, qkv_bias, attn_dropout_prob, proj_dropout_prob)
     end
 end
 
@@ -46,11 +47,14 @@ function ReductionBlock(in_dims, embed_dims, token_dims; nheads=1, kernel_size=3
                 PRM(kernel_size, in_dims, embed_dims, downsample, dilations), 
                 img2seq, 
                 Flux.LayerNorm(embed_dims * length(dilations)), 
-                AttentionLayer(embed_dims * length(dilations), token_dims; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_drop, proj_dropout_prob=drop, windows=windows)
+                AttentionLayer(embed_dims * length(dilations), token_dims; nheads, qkv_bias, attn_dropout_prob=attn_drop, proj_dropout_prob=drop, windows=windows)
             )
         ), 
         Flux.SkipConnection(
-            Flux.Chain(Flux.LayerNorm(token_dims), MLP(token_dims, token_dims * mlp_ratio, token_dims, drop)), 
+            Flux.Chain(
+                Flux.LayerNorm(token_dims), 
+                MLP(token_dims, token_dims * mlp_ratio, token_dims, drop)
+            ), 
             +
         ), 
         seq2img
@@ -61,10 +65,10 @@ function NormalBlock(dims; nheads=1, groups=1, mlp_ratio=4, qkv_bias=false, drop
     Flux.Chain(
         Flux.Parallel(
             +, 
-            Flux.Chain(seq2img, NormalPCM(dims, dims * mlp_ratio, dims, 1, groups), img2seq), 
+            Flux.Chain(seq2img, NormalPCM(dims, dims * mlp_ratio, dims, groups), img2seq), 
             Flux.Chain(
                 Flux.LayerNorm(dims), 
-                AttentionLayer(dims, dims; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_drop, proj_dropout_prob=drop, windows=windows)
+                AttentionLayer(dims, dims; nheads, qkv_bias, attn_dropout_prob=attn_drop, proj_dropout_prob=drop, windows=windows)
             )
         ), 
         Flux.SkipConnection(
@@ -74,24 +78,27 @@ function NormalBlock(dims; nheads=1, groups=1, mlp_ratio=4, qkv_bias=false, drop
     )
 end
 
-function VitaeV2(;nclasses=1000)
+
+function VitaeV2(;inchannels=3, depths=[2,2,8,2], reduction_heads=[1,1,2,4], normal_heads=[1,2,4,8],
+    embed_dims=[64, 64, 128, 256], token_dims=[64, 128, 256, 512], normal_groups=[1, 32, 64, 128], windows=[true,true,false,false],
+    reduction_groups=[1, 16, 32, 64], mlp_ratio=4, qkv_bias=true, drop=0.1, attn_drop=0.1, nclasses=1000)
     Flux.Chain(
-        ReductionBlock(3, 64, 64, nheads=1, kernel_size=7, downsample=4, groups=1, windows=true), 
+        ReductionBlock(inchannels, embed_dims[1], token_dims[1]; nheads=reduction_heads[1], groups=reduction_groups[1], windows=windows[1], kernel_size=7, downsample=4, mlp_ratio, qkv_bias, attn_drop, drop), 
         img2seq, 
-        [NormalBlock(64, nheads=1, groups=1, windows=true) for _ in 1:2]..., 
+        [NormalBlock(token_dims[1]; nheads=normal_heads[1], groups=normal_groups[1], windows=windows[1], mlp_ratio, qkv_bias, drop, attn_drop) for _ in 1:depths[1]]..., 
         seq2img, 
-        ReductionBlock(64, 64, 128, nheads=1, kernel_size=3, downsample=2, dilations=[1,2,3], groups=16, windows=true), 
+        ReductionBlock(token_dims[1], embed_dims[2], token_dims[2]; nheads=reduction_heads[2], groups=reduction_groups[2], windows=windows[2], dilations=[1,2,3], kernel_size=3, downsample=2, mlp_ratio, qkv_bias, attn_drop, drop), 
         img2seq, 
-        [NormalBlock(128, nheads=2, groups=32, windows=true) for _ in 1:2]..., 
+        [NormalBlock(token_dims[2]; nheads=normal_heads[2], groups=normal_groups[2], windows=windows[2], mlp_ratio, qkv_bias, drop, attn_drop) for _ in 1:depths[2]]..., 
         seq2img, 
-        ReductionBlock(128, 128, 256, nheads=2, kernel_size=3, downsample=2, dilations=[1,2], groups=32), 
+        ReductionBlock(token_dims[2], embed_dims[3], token_dims[3]; nheads=reduction_heads[3], groups=reduction_groups[3], windows=windows[3], dilations=[1,2], kernel_size=3, downsample=2, mlp_ratio, qkv_bias, attn_drop, drop), 
         img2seq, 
-        [NormalBlock(256, nheads=4, groups=64) for _ in 1:8]..., 
+        [NormalBlock(token_dims[3]; nheads=normal_heads[3], groups=normal_groups[3], windows=windows[3], mlp_ratio, qkv_bias, drop, attn_drop) for _ in 1:depths[3]]..., 
         seq2img, 
-        ReductionBlock(256, 256, 512, nheads=4, kernel_size=3, downsample=2, dilations=[1,2], groups=64), 
+        ReductionBlock(token_dims[3], embed_dims[4], token_dims[4]; nheads=reduction_heads[4], groups=reduction_groups[4], windows=windows[4], dilations=[1,2], kernel_size=3, downsample=2, mlp_ratio, qkv_bias, attn_drop, drop), 
         img2seq, 
-        [NormalBlock(512, nheads=8, groups=128) for _ in 1:2]..., 
+        [NormalBlock(token_dims[4]; nheads=normal_heads[4], groups=normal_groups[4], windows=windows[4], mlp_ratio, qkv_bias, drop, attn_drop) for _ in 1:depths[4]]..., 
         x -> dropdims(mean(x, dims=2), dims=2), 
-        Flux.Dense(512=>nclasses)
+        Flux.Dense(token_dims[4]=>nclasses)
     )
 end

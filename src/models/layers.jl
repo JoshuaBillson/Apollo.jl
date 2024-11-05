@@ -230,32 +230,6 @@ function (m::WindowedAttention)(x::AbstractArray{<:Number, 3})
     end
 end
 
-"""
-struct WindowTransformerBlock{A,M,C,N}
-    att::A
-    mlp::M
-    conv::C
-    norm1::N
-    norm2::N
-    norm3::N
-    window_size::Int
-end
-
-Flux.@layer :expand WindowTransformerBlock
-
-function WindowTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bias=true, drop=0.0, attn_drop=0.0)
-    WindowTransformerBlock(
-        WindowedAttention(dim, dim, 7; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_drop, proj_dropout_prob=drop),
-        MLP(dim, dim*mlp_ratio, dim, drop), 
-        Flux.Conv((7,7), dim => dim, groups=dim, pad=Flux.SamePad()), 
-        Flux.LayerNorm(dim), 
-        Flux.LayerNorm(dim), 
-        Flux.LayerNorm(dim), 
-        window_size
-    )
-end
-"""
-
 function WinTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bias=true, drop=0.1, attn_drop=0.1)
     Flux.Chain(
         Flux.SkipConnection(
