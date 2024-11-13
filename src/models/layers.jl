@@ -128,11 +128,6 @@ end
 
 function (m::MultiHeadSelfAttention)(x::AbstractArray{<:Number, 3})
     qkv = m.qkv_layer(x)
-    #C, L, N = size(x)
-    #qkv = reshape(m.qkv_layer(x), (:, 3, L, N))
-    #q = reshape(qkv[:,1:1,:,:], (:,L,N))
-    #k = reshape(qkv[:,2:2,:,:], (:,L,N))
-    #v = reshape(qkv[:,3:3,:,:], (:,L,N))
     q, k, v = Flux.chunk(qkv, 3, dims = 1)
     y, α = Flux.NNlib.dot_product_attention(q, k, v; m.nheads, fdrop = m.attn_drop)
     y = m.projection(y)
@@ -153,7 +148,7 @@ end
 
 Flux.@layer :expand WindowedAttention trainable=(relative_position_bias, qkv_layer, attn_drop, projection)
 
-function WindowedAttention(inplanes::Int, outplanes::Int, feature_size::Int, window_size::Int; nheads::Int = 8, qkv_bias::Bool = false, attn_dropout_prob = 0.0, proj_dropout_prob = 0.0, window_shift=0)
+function WindowedAttention(inplanes::Int, outplanes::Int; imsize=224, window_size=7, nheads::Int = 8, qkv_bias::Bool = false, attn_dropout_prob = 0.0, proj_dropout_prob = 0.0, window_shift=0)
     @assert outplanes % nheads==0 "planes should be divisible by nheads"
     @assert window_shift >= 0 "window shift must be an integer greater than or equal to zero"
 
@@ -169,7 +164,7 @@ function WindowedAttention(inplanes::Int, outplanes::Int, feature_size::Int, win
     relative_position_index = compute_relative_position_index((window_size,window_size))
 
     # Compute Attention Mask for Shifted Windows
-    attention_mask = window_shift > 0 ? compute_attention_mask(window_size, (feature_size, feature_size)) : nothing
+    attention_mask = window_shift > 0 ? compute_attention_mask(window_size, (imsize, imsize)) : nothing
 
     # Construct Layer
     return WindowedAttention(
@@ -208,8 +203,8 @@ function (m::WindowedAttention)(x::AbstractArray{<:Number, 3})
     # Get Attention Mask
     attn_mask = nothing
     if !isnothing(m.attention_mask)
-        nW = size(m.attention_mask, 3)
-        wL = size(m.attention_mask, 1)
+        nW = size(m.attention_mask, 3)  # number of windows
+        wL = m.window_size ^ 2  # length of flattened window 
         attn_mask = Flux.zeros_like(m.attention_mask, Bool, (wL,wL,m.nheads,nW,N)) .| reshape(m.attention_mask, (wL,wL,1,nW,1))
         attn_mask = reshape(attn_mask, (wL,wL,m.nheads,:))
     end
@@ -228,72 +223,6 @@ function (m::WindowedAttention)(x::AbstractArray{<:Number, 3})
     else
         return @pipe window_reverse(y, m.window_size, W, W) |> reshape(_, (C,:,N))
     end
-end
-
-function WinTransformerBlock(dim, nheads; window_size=7, mlp_ratio=4, qkv_bias=true, drop=0.1, attn_drop=0.1)
-    Flux.Chain(
-        Flux.SkipConnection(
-            Flux.Chain(
-                Flux.LayerNorm(dim), 
-                WindowedAttention(dim, dim, window_size; nheads=nheads, qkv_bias=qkv_bias, attn_dropout_prob=attn_drop, proj_dropout_prob=drop),
-            ), 
-            +
-        ), 
-        Flux.LayerNorm(dim), 
-        Flux.SkipConnection(
-            Flux.Chain(
-                seq2img, 
-                Flux.Conv((3,3), dim => dim, groups=1, dilation=3, pad=Flux.SamePad()), 
-                img2seq
-            ), 
-            +
-        ), 
-        Flux.SkipConnection(
-            Flux.Chain(
-                Flux.LayerNorm(dim), 
-                MLP(dim, dim*mlp_ratio, dim, drop), 
-            ), 
-            +
-        )
-    )
-end
-
-"""
-function (m::WindowTransformerBlock)(x)
-    # First Block
-    residual = x
-    x = residual .+ m.att(m.norm1(x))
-
-    # Second Block
-    residual = m.norm2(x)
-    x = @pipe seq2img(x) |> m.conv |> img2seq
-    x = residual .+ x
-
-    # Third Block
-    residual = x
-    x = m.norm3(x) |> m.mlp
-    return residual .+ x
-end
-"""
-function WinTransformer(;depths=[2,2,6,2], embed_dim=96, nheads=[3,6,12,24], nclasses=1000)
-    dims = [embed_dim * 2^(i-1) for i in eachindex(depths)]
-    Flux.Chain(
-        Flux.Conv((4,4), 3=>embed_dim, stride=4, pad=Flux.SamePad()), 
-        Flux.Dropout(0.1), 
-        img2seq, 
-        [Apollo.WinTransformerBlock(dims[1], nheads[1]) for _ in 1:depths[1]]...,
-        Apollo.PatchMerging(dims[1]),
-        [Apollo.WinTransformerBlock(dims[2], nheads[2]) for _ in 1:depths[2]]..., 
-        Apollo.PatchMerging(dims[2]), 
-        [Apollo.WinTransformerBlock(dims[3], nheads[3]) for _ in 1:depths[3]]..., 
-        Apollo.PatchMerging(dims[3]), 
-        [Apollo.WinTransformerBlock(dims[4], nheads[4]) for _ in 1:depths[4]]..., 
-        seq2img, 
-        Flux.AdaptiveMeanPool((1,1)), 
-        Flux.MLUtils.flatten, 
-        Flux.LayerNorm(dims[4]),
-        Flux.Dense(dims[4] => nclasses)
-    )
 end
 
 function MLP(indims, hiddendims, outdims, dropout)
