@@ -242,6 +242,14 @@ function PatchMerging(dims::Int)
     )
 end
 
+function PatchExpanding(dims::Int)
+    Flux.Chain(
+        Flux.LayerNorm(dims), 
+        Flux.Dense(dims => dims * 2, bias=false), 
+        expand_patches, 
+    )
+end
+
 img2seq(x) = permutedims(reshape(x, (:, size(x, 3), size(x, 4))), (2, 1, 3))
 
 function seq2img(x)
@@ -279,6 +287,14 @@ function merge_patches(x::AbstractArray{<:Number,4})
     x3 = @view x[:,1:2:end,2:2:end,:]
     x4 = @view x[:,2:2:end,2:2:end,:]
     return cat(x1, x2, x3, x4, dims=1)
+end
+
+expand_patches(x::AbstractArray{<:Number,3}) = seq2img(x) |> expand_patches |> img2seq
+function expand_patches(x::AbstractArray{<:Number,4})
+    W, H, C, N = size(x)
+    @pipe reshape(x, (W, H, C ÷ 4, 2, 2, N)) |>
+    permutedims(_, (1,4,2,5,3,6)) |>
+    reshape(_, (W * 2, H * 2, :, N))
 end
 
 function compute_relative_position_index(window_size)

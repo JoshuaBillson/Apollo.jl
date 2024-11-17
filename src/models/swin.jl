@@ -33,23 +33,119 @@ function SwinLayer(dim, imsize, depth, nheads, window_size, shift, mlp_ratio, qk
             window_shift = ((i % 2) == 0) ? window_shift : 0
             )
         for i in 1:depth]
-    return patch_merging ? Flux.Chain(blocks..., PatchMerging(dim)) : Flux.Chain(blocks...)
+    return patch_merging ? Flux.Chain(img2seq, PatchMerging(dim ÷ 2), blocks..., seq2img) : Flux.Chain(img2seq, blocks..., seq2img)
 end
 
 function swin(embed_dims, depths, nheads; 
     inchannels=3, nclasses=1000, windows=[7,7,7,7], mlp_ratio=4, qkv_bias=true, drop_rate=0.1, attn_drop_rate=0.1, shift_windows=true)
-
     nlayers = length(depths)
     resolutions = [(224 ÷ 4) ÷ (2 ^ (i-1)) for i in eachindex(depths)]
     Flux.Chain(
-        Flux.Conv((4,4), inchannels=>embed_dims[1], stride=4, pad=Flux.SamePad()), 
+        Flux.Chain(
+            Flux.Conv((4,4), inchannels=>embed_dims[1], stride=4, pad=Flux.SamePad()), 
+            [SwinLayer(embed_dims[i], resolutions[i], depths[i], nheads[i], windows[i], shift_windows, mlp_ratio, qkv_bias, drop_rate, attn_drop_rate, i != 1) for i in 1:nlayers]..., 
+            img2seq, 
+            Flux.LayerNorm(embed_dims[4])
+        ), 
+        Flux.Chain(
+            seq2img, 
+            Flux.AdaptiveMeanPool((1,1)), 
+            Flux.MLUtils.flatten, 
+            Flux.Dense(embed_dims[4] => nclasses)
+        )
+    )
+end
+
+function swin_unet_block(dim::Int, imsize::Int, nheads::Int; window_size=7)
+    window_shift = window_size ÷ 2
+    blocks = [
+        SwinTransformerBlock(
+            dim, 
+            nheads; 
+            imsize=imsize,
+            window_size=window_size, 
+            mlp_ratio=4, 
+            qkv_bias=true, 
+            drop=0.1, 
+            attn_drop=0.1, 
+            window_shift = ((i % 2) == 0) ? window_shift : 0) 
+    for i in 1:2]
+    return Flux.Chain(blocks...)
+end
+
+function swin_unet_decoder(dim::Int, imsize::Int, nheads::Int, expand_patches::Bool; window_size=7)
+    window_shift = window_size ÷ 2
+    blocks = [
+        SwinTransformerBlock(
+            dim, 
+            nheads; 
+            imsize=imsize,
+            window_size=window_size, 
+            mlp_ratio=4, 
+            qkv_bias=true, 
+            drop=0.1, 
+            attn_drop=0.1, 
+            window_shift = ((i % 2) == 0) ? window_shift : 0) 
+    for i in 1:2]
+    return expand_patches ? Flux.Chain(img2seq, PatchExpanding(dim * 2), blocks..., seq2img) : Flux.Chain(img2seq, blocks..., seq2img)
+end
+
+function swin_unet(;inchannels=3, nclasses=3)
+    Flux.Chain(
+        # Patch Embedding
+        Flux.Conv((4,4), inchannels=>128, stride=4, pad=Flux.SamePad()), 
+
+        # Encoder Block 1
         img2seq, 
-        [SwinLayer(embed_dims[i], resolutions[i], depths[i], nheads[i], windows[i], shift_windows, mlp_ratio, qkv_bias, drop_rate, attn_drop_rate, i < nlayers) for i in 1:nlayers]..., 
-        Flux.LayerNorm(embed_dims[4]), 
+        swin_unet_block(128, 56, 4), 
+        Flux.SkipConnection(
+            Flux.Chain(
+
+                # Encoder Block 2
+                PatchMerging(128), 
+                swin_unet_block(256, 28, 8), 
+                Flux.SkipConnection(
+                    Flux.Chain(
+
+                        # Encoder Block 3
+                        PatchMerging(256), 
+                        swin_unet_block(512, 14, 16), 
+                        Flux.SkipConnection(
+
+                            # Bottle-Neck
+                            Flux.Chain(
+                                PatchMerging(512), 
+                                swin_unet_block(1024, 7, 32), 
+                                PatchExpanding(1024)
+                            ), 
+                            (a, b) -> cat(a, b, dims=1)
+                        ), 
+
+                        # Decoder Block 3
+                        Flux.Dense(1024=>512), 
+                        swin_unet_block(512, 14, 16), 
+                        PatchExpanding(512)
+                    ), 
+                    (a, b) -> cat(a, b, dims=1)
+                ), 
+
+                # Decoder Block 2
+                Flux.Dense(512=>256), 
+                swin_unet_block(256, 28, 8), 
+                PatchExpanding(256)
+            ), 
+            (a, b) -> cat(a, b, dims=1)
+        ), 
+
+        # Decoder Block 1
+        Flux.Dense(256=>128), 
+        swin_unet_block(128, 56, 4),
         seq2img, 
-        Flux.AdaptiveMeanPool((1,1)), 
-        Flux.MLUtils.flatten, 
-        Flux.Dense(embed_dims[4] => nclasses)
+
+        # Classification Head
+        x -> Flux.upsample_nearest(x, (4,4)),
+        Flux.Conv((3,3), 128=>128, Flux.relu, pad=Flux.SamePad()), 
+        Flux.Conv((1,1), 128=>nclasses)
     )
 end
 
