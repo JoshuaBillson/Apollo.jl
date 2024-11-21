@@ -47,7 +47,7 @@ end
 
 function _build_unet_head(infilters, nclasses, batch_norm)
     Flux.Chain(
-        x -> Flux.upsample_nearest(x, (2,2)),
+        Base.Fix2(Flux.upsample_nearest, (2,2)), 
         ConvBlock(3, infilters, infilters, Flux.relu, batch_norm=batch_norm), 
         Flux.Conv((1,1), infilters=>nclasses)
     )

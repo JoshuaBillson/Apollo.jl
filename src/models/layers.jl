@@ -250,6 +250,20 @@ function PatchExpanding(dims::Int)
     )
 end
 
+struct VariableConv{C}
+    conv::C
+end
+
+Flux.@layer :expand VariableConv
+
+function VariableConv(kernel, dims; activation=Flux.relu, pad=Flux.SamePad(), stride=1)
+    return VariableConv(Flux.Conv(kernel, 1=>dims, activation; pad, stride))
+end
+
+function (m::VariableConv)(x::AbstractArray{<:Number,4})
+    return reduce(+, [m.conv(x[:,:,i:i,:]) for i in 1:size(x,3)])
+end
+
 img2seq(x) = permutedims(reshape(x, (:, size(x, 3), size(x, 4))), (2, 1, 3))
 
 function seq2img(x)
@@ -356,7 +370,7 @@ end
 function compute_attention_mask(window_size::Int, feature_size::Tuple{Int,Int})
     W, H = feature_size
     shift_size = window_size ÷ 2
-    img_mask = zeros(Float32, 1, W, H, 1)
+    img_mask = zeros(UInt8, 1, W, H, 1)
     w_slices = [1:(W-window_size), (W-window_size+1):(W-shift_size), (W-shift_size+1):W]
     h_slices = [1:(H-window_size), (H-window_size+1):(H-shift_size), (H-shift_size+1):H]
     cnt = 0
