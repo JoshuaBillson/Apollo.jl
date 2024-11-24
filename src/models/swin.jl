@@ -146,7 +146,7 @@ function swin_unet(;inchannels=3, nclasses=3, imsize=224)
 
         # Classification Head
         seq2img, 
-        Flux.Conv((3,3), 32=>32, Flux.relu, pad=Flux.SamePad()), 
+        #Flux.Conv((3,3), 32=>32, Flux.relu, pad=Flux.SamePad()), 
         Flux.Conv((1,1), 32=>nclasses)
     )
 end

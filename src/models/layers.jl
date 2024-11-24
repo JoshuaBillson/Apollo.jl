@@ -306,8 +306,8 @@ end
 expand_patches(x::AbstractArray{<:Number,3}) = seq2img(x) |> expand_patches |> img2seq
 function expand_patches(x::AbstractArray{<:Number,4})
     W, H, C, N = size(x)
-    @pipe reshape(x, (W, H, C ÷ 4, 2, 2, N)) |>
-    permutedims(_, (4,1,5,2,3,6)) |>
+    @pipe reshape(x, (W, H, 2, 2, C ÷ 4, N)) |>
+    permutedims(_, (1,3,2,4,5,6)) |>
     reshape(_, (W * 2, H * 2, :, N))
 end
 
