@@ -17,9 +17,33 @@ function DeeplabV3(;encoder=ResNet(depth=34, weights=:ImageNet), inchannels=3, n
         build_encoder(encoder, inchannels)[1:4], 
         build_deeplab_aspp(filters(encoder)[4]),
         build_deeplab_decoder(filters(encoder)[2], 256), 
-        Flux.Conv((1,1), 256=>nclasses),
+        Flux.Chain(Conv(3, 256, 256, Flux.relu), Flux.Conv((1,1), 256=>nclasses))
     )
 end
+
+function deeplabv3(;encoder=ResNet(depth=34, weights=:ImageNet), inchannels=3, nclasses=1)
+    _filters = filters(encoder)
+    encoder1, encoder2, encoder3, encoder4, _ = build_encoder(encoder, inchannels)
+    aspp = build_deeplab_aspp(_filters[4])
+    Flux.Chain(
+        Flux.Chain(;encoder1, encoder2), 
+        Flux.Parallel(
+            (a, b) -> cat(a, b, dims=3), 
+            Flux.Chain(;encoder3, encoder4, aspp, up=Base.Fix2(Flux.upsample_bilinear, (4,4))), 
+            Conv(1, _filters[2], 48, Flux.relu),
+        ), 
+        Flux.Chain(
+            Conv(3, 256+48, 256, Flux.relu),
+            Conv(3, 256, 256, Flux.relu),
+            Base.Fix2(Flux.upsample_bilinear, (4,4))
+        ), 
+        Flux.Chain(
+            Conv(3, 256, 256, Flux.relu), 
+            Flux.Conv((1,1), 256=>nclasses)
+        )
+    )
+end
+
 
 function (m::DeeplabV3)(x)
     # Encoder Forward

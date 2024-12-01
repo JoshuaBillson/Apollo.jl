@@ -33,7 +33,10 @@ function SwinLayer(dim, imsize, depth, nheads, window_size, shift, mlp_ratio, qk
             window_shift = ((i % 2) == 0) ? window_shift : 0
             )
         for i in 1:depth]
-    return patch_merging ? Flux.Chain(img2seq, PatchMerging(dim ÷ 2), blocks..., seq2img) : Flux.Chain(img2seq, blocks..., seq2img)
+    if patch_merging
+        return Flux.Chain(img2seq, PatchMerging(dim ÷ 2), blocks..., seq2img)
+    end
+    return Flux.Chain(img2seq, blocks..., seq2img)
 end
 
 function swin(embed_dims, depths, nheads; 
@@ -96,58 +99,61 @@ function swin_unet(;inchannels=3, nclasses=3, imsize=224)
         # Patch Embedding
         Flux.Conv((4,4), inchannels=>128, stride=4, pad=Flux.SamePad()), 
 
-        # Encoder Block 1
-        img2seq, 
-        swin_unet_block(128, feature_sizes[1], 4), 
-        Flux.SkipConnection(
-            Flux.Chain(
+        # Encoder
+        Flux.Chain(
 
-                # Encoder Block 2
-                PatchMerging(128), 
-                swin_unet_block(256, feature_sizes[2], 8), 
-                Flux.SkipConnection(
-                    Flux.Chain(
+            # Encoder Block 1
+            img2seq, 
+            swin_unet_block(128, feature_sizes[1], 4), 
+            Flux.SkipConnection(
+                Flux.Chain(
 
-                        # Encoder Block 3
-                        PatchMerging(256), 
-                        swin_unet_block(512, feature_sizes[3], 16), 
-                        Flux.SkipConnection(
+                    # Encoder Block 2
+                    PatchMerging(128), 
+                    swin_unet_block(256, feature_sizes[2], 8), 
+                    Flux.SkipConnection(
+                        Flux.Chain(
 
-                            # Bottle-Neck
-                            Flux.Chain(
-                                PatchMerging(512), 
-                                swin_unet_block(1024, feature_sizes[4], 32), 
-                                PatchExpanding(1024)
+                            # Encoder Block 3
+                            PatchMerging(256), 
+                            swin_unet_block(512, feature_sizes[3], 16), 
+                            Flux.SkipConnection(
+
+                                # Bottle-Neck
+                                Flux.Chain(
+                                    PatchMerging(512), 
+                                    swin_unet_block(1024, feature_sizes[4], 32), 
+                                    PatchExpanding(1024)
+                                ), 
+                                (a, b) -> cat(a, b, dims=1)
                             ), 
-                            (a, b) -> cat(a, b, dims=1)
+
+                            # Decoder Block 3
+                            Flux.Dense(1024=>512), 
+                            swin_unet_block(512, feature_sizes[3], 16), 
+                            PatchExpanding(512)
                         ), 
-
-                        # Decoder Block 3
-                        Flux.Dense(1024=>512), 
-                        swin_unet_block(512, feature_sizes[3], 16), 
-                        PatchExpanding(512)
+                        (a, b) -> cat(a, b, dims=1)
                     ), 
-                    (a, b) -> cat(a, b, dims=1)
-                ), 
 
-                # Decoder Block 2
-                Flux.Dense(512=>256), 
-                swin_unet_block(256, feature_sizes[2], 8), 
-                PatchExpanding(256)
+                    # Decoder Block 2
+                    Flux.Dense(512=>256), 
+                    swin_unet_block(256, feature_sizes[2], 8), 
+                    PatchExpanding(256)
+                ), 
+                (a, b) -> cat(a, b, dims=1)
             ), 
-            (a, b) -> cat(a, b, dims=1)
+
+            # Decoder Block 1
+            Flux.Dense(256=>128), 
+            swin_unet_block(128, feature_sizes[1], 4),
+            seq2img, 
+            Base.Fix2(Flux.upsample_bilinear, (4,4)), 
+            Flux.Conv((3,3), 128=>128, Flux.relu, pad=Flux.SamePad()), 
         ), 
 
-        # Decoder Block 1
-        Flux.Dense(256=>128), 
-        swin_unet_block(128, feature_sizes[1], 4),
-        PatchExpanding(128),
-        PatchExpanding(64),
-
         # Classification Head
-        seq2img, 
-        #Flux.Conv((3,3), 32=>32, Flux.relu, pad=Flux.SamePad()), 
-        Flux.Conv((1,1), 32=>nclasses)
+        Flux.Conv((1,1), 128=>nclasses)
     )
 end
 

@@ -11,6 +11,7 @@ using Pipe: @pipe
 const rng = StableRNG(123)
 
 @testset "transforms" begin
+    """
     # Test Data
     r1 = Raster(rand(rng, Float32, 256, 256, 3), (X, Y, Band))
     r2 = Raster(rand(rng, Float32, 3, 256, 256), (Band, X, Y))
@@ -42,7 +43,6 @@ const rng = StableRNG(123)
     one_hot = reshape(cat([1 0; 0 1], [0 1; 0 0], [0 0; 1 0], dims=3), (2,2,3,1))
     @test all(Apollo.onecold(one_hot) .== [0 1; 2 0])
 
-    """
     # OneHot Transform
     t = OneHot(labels=[1,2,3])
     @test apply(t, Image(), logits, 123) == logits

@@ -43,11 +43,11 @@ end
 function Conv(kernel_size::Int, in::Int, out::Int, σ; batch_norm=true, groups=1, dilation=1)
     if batch_norm
         return Flux.Chain(
-            Flux.Conv((kernel_size, kernel_size), in=>out, pad=Flux.SamePad(), groups=groups, dilation=dilation),
+            Flux.Conv((kernel_size, kernel_size), in=>out; groups, dilation, pad=Flux.SamePad()),
             Flux.BatchNorm(out, σ), 
         )
     else
-        return Flux.Conv((kernel_size, kernel_size), in=>out, σ, pad=Flux.SamePad())
+        return Flux.Conv((kernel_size, kernel_size), in=>out, σ; groups, dilation, pad=Flux.SamePad())
     end
 end
 
