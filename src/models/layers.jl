@@ -9,10 +9,11 @@ A separable convolutional layer consists of a depthwise convolution followed by 
 - `out`: The number of output features.
 - `σ`: The activation function to apply following the 1x1 convolution.
 """
-function SeparableConv(kernel_size::Int, in::Int, out::Int, σ=Flux.relu)
+function SeparableConv(kernel::Tuple{Int,Int}, in::Int, out::Int; stride=1, act=identity, pad=Flux.SamePad())
     Flux.Chain(
-        Flux.DepthwiseConv((kernel_size, kernel_size), in=>in, pad=Flux.SamePad()), 
-        Flux.Conv((1,1), in=>out, σ, pad=Flux.SamePad())
+        Flux.DepthwiseConv(kernel, in=>in; pad, stride), 
+        Flux.BatchNorm(in), 
+        Flux.Conv((1,1), in=>out, act, pad=Flux.SamePad())
     )
 end
 

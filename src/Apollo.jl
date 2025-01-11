@@ -54,6 +54,7 @@ include("models/ssc_cnn.jl")
 include("models/vitae.jl")
 include("models/swin.jl")
 include("models/pvt.jl")
-export Classifier, UNet, DeeplabV3, SSC_CNN
+include("models/cvt.jl")
+export Classifier, UNet, DeeplabV3, SSC_CNN, SWIN, swin_unet, PVT, CVT
 
 end
